@@ -30,6 +30,8 @@
 
 namespace KCP {
 
+static uint32_t seq = 0, server_ack_seq = 0;
+static int CLIENT_SUM_SEND = 0;
 
 typedef struct _UDP_Def_ {
     int32_t fd;
@@ -52,6 +54,16 @@ typedef struct __TCP_INFO__ {
 } tcp_info;
 
 void prase_tcp_packet(const char* buffer,size_t len, tcp_info* info);
+
+
+
+
+void fake_tcp_send(const char* buffer, size_t len, tcp_info* info, size_t sended);
+
+
+
+
+
 
 
 int32_t udp_Create(UDP_Def *udp, uint32_t remoteIP, uint16_t remotePort, uint16_t localPort);

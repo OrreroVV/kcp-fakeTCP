@@ -14,6 +14,17 @@
 #include <code/kcp/ikcp.h>
 #include <code/kcp/kcp_socket.h>
 #include <thread>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <cstring>
+#include <cstdlib>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 
 static const char *s_ip = "127.0.0.1";
 static short s_port = 6666;
@@ -35,26 +46,50 @@ typedef struct __cb_params__ {
 
 #define UDP_MTU 1400
 
+bool should_exit = false;
+
 int tcp_server_send_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 	tcp_def* def =  (tcp_def*)user;
-	std::cout << "sending: " << len << std::endl;
     int sended = 0;
+
+	// std::cout << "server send cb len: " << len << std::endl;
+	sockaddr_in client_addr;
+	SetAddr(c_ip, c_port, &client_addr);
+	socklen_t addrlen = sizeof(client_addr);
+
     while (sended < len) {
         size_t s = (len - sended);
         if(s > UDP_MTU) s = UDP_MTU;
-        ssize_t ret = send(def->fd, buffer + sended, s, 0);
+        ssize_t ret = sendto(def->fd, buffer + sended, s, 0, (sockaddr*)&client_addr, addrlen);
+		// std::cout << "server send to: " << ret << std::endl;
         if(ret < 0){
             return -1;
         }
         sended += s;
     }
-
     return (size_t)sended;
+}
+
+void* server_loop(void* args) {
+	
+	cb_params* param = (cb_params*) args;
+	int fd = param->fd;
+	ikcpcb* m_kcp = param->m_kcp;
+	assert(fd && m_kcp);
+	while (!should_exit) {
+		ikcp_update(m_kcp, KCP::iclock());
+		KCP::isleep(1);
+	}
+	if (param) {
+		delete param;
+        param = nullptr;
+	}
+	return nullptr;
 }
 
 void* run_tcp_server(void* args) {
 
-	std::cout << "start tcp_server thread: " << std::endl;
+	// std::cout << "start tcp_server thread: " << std::endl;
 
 	cb_params* param = (cb_params*) args;
 
@@ -67,34 +102,50 @@ void* run_tcp_server(void* args) {
 	
 	ssize_t len = 0;
 	char buffer[2048] = { 0 };
-	socklen_t src_len = sizeof(struct sockaddr_in);
-
-	while (true) {
+    std::ofstream file("received_file.txt", std::ios::out);
+    if (!file) {
+        exit(1);
+    }
+	while (!should_exit) {
 		ikcp_update(m_kcp, KCP::iclock());
 		struct sockaddr_in src;
-		memset(&src, 0, src_len);
-		len = read(fd, buffer, sizeof(buffer));
+		socklen_t src_len = sizeof(struct sockaddr_in);
+		SetAddr(c_ip, c_port, &src);
+		len = recvfrom(fd, buffer, sizeof(buffer), 0, (sockaddr*)&src, &src_len);
+		// std::cout << "server recv len: " << len << std::endl;
 		if (len > 0) {
+
 			int ret = ikcp_input(m_kcp, buffer, len);
+			// std::cout << "server ikcp_input ret: " << ret << std::endl;
 			if (ret < 0) {
 				printf("ikcp_input error: %d\n", ret);
 				continue;
 			}
 			char recv_buffer[2048] = { 0 };
 			ret = ikcp_recv(m_kcp, recv_buffer, len);
-			if(ret >= 0) {
+			if(ret > 0) {
+				file.write(recv_buffer, ret);
 				printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
+			} else if (!ret) {
+				break;
+			} else {
+				perror("ikcp_recv");
 			}
+		} else if (!len) {
+			break;
 		} else {
 			perror("ikcp_recv");
 		}
-		KCP::isleep(100);
+		KCP::isleep(10);
 	}
 
-	std::cout << "server: close --------------------------" << std::endl;
-	close(fd);
-	delete param;
-	pthread_exit(NULL);
+	// std::cout << "server: close --------------------------" << std::endl;
+	if (param) {
+		delete param;
+        param = nullptr;
+	}
+	file.close();
+	return nullptr;
 }
 
 void start_kcp_server(int fd, ikcpcb* m_kcp) {
@@ -131,6 +182,14 @@ void start_kcp_server(int fd, ikcpcb* m_kcp) {
 	cb_params* param = new cb_params;
 	param->fd = fd;
 	param->m_kcp = m_kcp;
+
+
+	pthread_t server_tid;
+	if (pthread_create(&server_tid, NULL, server_loop, param) != 0) {
+        perror("pthread_create failed");
+        return;
+    }
+
     pthread_t tid;
 	if (pthread_create(&tid, NULL, run_tcp_server, param) != 0) {
         perror("pthread_create failed");
@@ -141,15 +200,16 @@ void start_kcp_server(int fd, ikcpcb* m_kcp) {
 void ServerRun(int fd, ikcpcb* m_kcp)
 {
 	start_kcp_server(fd, m_kcp);
-	//发送数据
-	// std::string msg;
+
+	std::string msg;
 	// std::cout << "send: ";
-	// msg = "hello world";
-    // while (true) {
-    //     int ret = ikcp_send(m_kcp, msg.c_str(), msg.size());
-    //     std::cout << "data_size: " << ret << std::endl;
-	// 	KCP::isleep(1000);
-    // }
+    while (std::cin >> msg) {
+        int ret = ikcp_send(m_kcp, msg.c_str(), msg.size());
+        // std::cout << "data_size: " << ret << std::endl;
+		if (ret < 0) {
+			perror("send");
+		}
+    }
 }
 
 enum conn_state {
@@ -236,11 +296,12 @@ uint16_t calculate_tcp_checksum(const struct iphdr* iphdr_packet, const struct t
 }
 
 
-uint32_t seq = 0, ack_seq = 0;
 
 int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 	tcp_def* def =  (tcp_def*)user;
 
+	
+	// std::cout << "server_ack_seq: " << server_ack_seq << std::endl;
 
     int sended = 0;
     while (sended < len) {
@@ -273,13 +334,13 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 		std::memset(&tcp_header, 0, sizeof(tcp_header));
 		tcp_header.source = htons(c_port);  // 源端口号
 		tcp_header.dest = htons(s_port);    // 目标端口号
-		tcp_header.seq = htonl(seq + data_len);          // 序列号
-		tcp_header.ack_seq = htonl(1);      // 确认号
+		tcp_header.seq = htonl(KCP::seq + KCP::CLIENT_SUM_SEND);          // 序列号
+		tcp_header.ack_seq = htonl(KCP::server_ack_seq);      // 确认号
 		tcp_header.doff = 5;                // TCP头部长度
 		tcp_header.fin = 0;                 
 		tcp_header.syn = 0;                 // SYN标志位
 		tcp_header.rst = 0;                 // RST标志位
-		tcp_header.psh = 0;                 // PSH标志位
+		tcp_header.psh = 1;                 // PSH标志位
 		tcp_header.ack = 1;                 // ACK标志位
 		tcp_header.urg = 0;                 // URG标志位
 		tcp_header.window = htons(8192);    // 窗口大小  
@@ -290,7 +351,7 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 		ip_header.check = calculate_ip_checksum(&ip_header);
 		tcp_header.check = htons(calculate_tcp_checksum(&ip_header, &tcp_header, buffer, data_len));
 
-		std::cout << "tcp_check: " << htons(tcp_header.check) << std::endl;
+		// // std::cout << "tcp_check: " << htons(tcp_header.check) << std::endl;
 		// 计算 TCP 校验和
 		// 构造数据包
 
@@ -302,12 +363,13 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 		struct sockaddr_in dest;
 		SetAddr(inet_ntoa(def->remote_addr.sin_addr), def->remote_addr.sin_port, &dest);				
 
-		ssize_t ret = sendto(def->fd, packet, sizeof(packet), 0, (struct sockaddr*)&dest, sizeof(struct sockaddr));
-		std::cout << "ret: " << ret << std::endl;
+		ssize_t ret = sendto(def->fd, packet, sizeof(packet), 0, (struct sockaddr*)&dest, sizeof(sockaddr));
+		// std::cout << "ret client send: " << ret << std::endl;
 		if (ret < 0) {
 			perror("sendto");
 			break;
 		}
+		KCP::CLIENT_SUM_SEND += data_len;
 
         // ssize_t ret = send(def->fd, buffer + sended, s, 0);
         // if(ret < 0){
@@ -319,40 +381,56 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
     return (size_t)sended;
 }
 
+void* client_loop(void* args) {
+    cb_params * param = (cb_params*)args;
+    ikcpcb* m_kcp = param->m_kcp;
+    while (!should_exit) {
+        ikcp_update(m_kcp, KCP::iclock());
+        KCP::isleep(1);
+    }
+
+	delete param;
+	return nullptr;
+}
+
 void run_tcp_client(int fd, ikcpcb* m_kcp) {
 
 	while (true)
 	{
-		struct sockaddr_in from_addr;
-		socklen_t from_size = sizeof(sockaddr_in);
-		SetAddr(s_ip, s_port, &from_addr);
-		
 		ssize_t len = 0;
 		char buffer[2048] = { 0 };
-		socklen_t src_len = sizeof(struct sockaddr_in);
 
 		while (true) {
-			ikcp_update(m_kcp, KCP::iclock());
+			// ikcp_update(m_kcp, KCP::iclock());
 			struct sockaddr_in src;
-			memset(&src, 0, src_len);
-			len = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&from_addr, &from_size);
-			KCP::tcp_info info;
-			KCP::prase_tcp_packet(buffer, len, &info);
-			if (info.port_dst != s_port) {
-				continue;
-			}
+			socklen_t src_len = sizeof(struct sockaddr_in);
+			SetAddr(s_ip, s_port, &src);
+			len = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&src, &src_len);
 
 			if (len > 0) {
-				int ret = ikcp_input(m_kcp, buffer, len);
-				if (ret < 0) {
-					printf("ikcp_input error: %d\n", ret);
+				KCP::tcp_info info;
+				KCP::prase_tcp_packet(buffer, len, &info);
+				if (info.port_dst != c_port) {
 					continue;
 				}
+				// std::cout << info.port_src << " " << info.port_dst << " " <<  info.seq << " " << info.ack_seq << std::endl;
+				KCP::server_ack_seq = info.seq + len - (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr));
+				// std::cout << "client recv len: " << len << std::endl;
+				//ikcp_send(m_kcp, "", 0);
+				if (len > (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr))) {
+					int ret = ikcp_input(m_kcp, buffer + sizeof(struct iphdr) + sizeof(struct tcphdr), len - (sizeof(struct iphdr) + sizeof(struct tcphdr)));
+					if (ret < 0) {
+						printf("ikcp_input error: %d\n", ret);
+						continue;
+					}
 
-				char recv_buffer[2048] = { 0 };
-				ret = ikcp_recv(m_kcp, recv_buffer, len);
-				if(ret >= 0) {
-					printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
+					char recv_buffer[2048] = { 0 };
+					ret = ikcp_recv(m_kcp, recv_buffer, len);
+					if(ret > 0) {
+						printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
+					}
+
+
 				}
 			}
 			KCP::isleep(1);
@@ -391,6 +469,15 @@ void kcp_client_start(int fd, ikcpcb* m_kcp) {
 			break;
 	}
 
+    cb_params* params = new cb_params;
+    params->fd = fd;
+    params->m_kcp = m_kcp;
+	pthread_t loop_tid;
+    if (pthread_create(&loop_tid, NULL, client_loop, params) != 0) {
+        perror("pthread_create");
+    }
+
+
 	std::thread server_thread(run_tcp_client, fd, m_kcp);
 	server_thread.detach();
 }
@@ -406,6 +493,7 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 	inet_aton(c_ip, &server_in_addr);
 
 	uint8_t syn = 0, ack = 0;
+	int ack_seq = 0;
 	struct pkt_info info;
 
 	while (1)
@@ -417,27 +505,27 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 		
 
 		if (s_state == tcp_closed) {
-			seq = 12345;
+			KCP::seq = 12345;
 			syn = 1;
 			s_state = tcp_syn_sent;
 		} else if (s_state == tcp_syn_sent) {
-			if (info.ack_seq != seq + 1) {
+			if (info.ack_seq != KCP::seq + 1) {
 				printf("invalid ack_seq: %d\n", info.ack_seq);
 				break;
 			}
 
-			seq++;
+			KCP::seq++;
 			syn = 0;
 			ack_seq = info.seq + 1;
 			ack = 1;
 			s_state = tcp_established;
 		} else {
 			ack_seq = info.seq + info.data_len;
-			seq += _s;
+			KCP::seq += _s;
 		}
 
 
-		int total = BuildPkt(data, _s, &client_in_addr, c_port, &server_in_addr, s_port, seq, ack_seq, syn, ack);
+		int total = BuildPkt(data, _s, &client_in_addr, c_port, &server_in_addr, s_port, KCP::seq, ack_seq, syn, ack);
 
 
 
@@ -448,9 +536,35 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 		}
 
 		if (s_state == tcp_established) {
+			KCP::server_ack_seq = info.seq + 1;
 			kcp_client_start(fd, m_kcp);
+
+			std::string filename = "/home/hzh/workspace/work/logs/data.txt";
+			// 打开文件并发送内容
+			std::ifstream file(filename, std::ios::in | std::ios::binary);
+			if (!file) {
+				exit(1);
+			}
+			char buf[1024];
+			size_t BUFFER_SIZE = 1024;
+			while (!file.eof()) {
+				file.read(buf, BUFFER_SIZE);
+				ikcp_send(m_kcp, buf, BUFFER_SIZE);
+			}
+			file.close();
+
+			std::cout << "send file finished" << std::endl;
+			std::string msg = "send file finished";
+			// ikcp_send(m_kcp, msg.c_str(), msg.size());
+
 			return;
-			std::string msg;
+
+			// std::cout << "sned:";
+			while (std::cin >> msg) {
+				ssize_t ret = ikcp_send(m_kcp, msg.c_str(), msg.size());
+				std::cout << "ret send: " << ret << std::endl;
+			}
+			return;
 			int sum = 0;
 			while (std::cin >> msg) {
 				ssize_t data_len = msg.size();
@@ -475,7 +589,7 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 				std::memset(&tcp_header, 0, sizeof(tcp_header));
 				tcp_header.source = htons(c_port);  // 源端口号
 				tcp_header.dest = htons(s_port);    // 目标端口号
-				tcp_header.seq = htonl(seq + sum);          // 序列号
+				tcp_header.seq = htonl(KCP::seq + sum);          // 序列号
 				tcp_header.ack_seq = htonl(info.seq + 1);      // 确认号
 				tcp_header.doff = 5;                // TCP头部长度
 				tcp_header.fin = 0;                 
@@ -491,7 +605,7 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 				// ip_hdr.ip_sum = checksum(&ip_header, sizeof(ip_header));
 				ip_header.check = calculate_ip_checksum(&ip_header);
 				tcp_header.check = htons(calculate_tcp_checksum(&ip_header, &tcp_header, msg.c_str(), data_len));
-				std::cout << "tcp_check: " << htons(tcp_header.check) << std::endl;
+				// std::cout << "tcp_check: " << htons(tcp_header.check) << std::endl;
     			// 计算 TCP 校验和
 				// 构造数据包
 
@@ -504,7 +618,7 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 				SetAddr(s_ip, s_port, &dest);				
 
 				int ret = sendto(fd, packet, sizeof(packet), 0, (struct sockaddr*)&dest, sizeof(struct sockaddr));
-				std::cout << "ret: " << ret << std::endl;
+				// std::cout << "ret client send: " << ret << std::endl;
 				if (ret < 0) {
 					perror("sendto");
                     break;
@@ -528,9 +642,6 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 				break;
 			}
 		}
-
-
-		
 	}
 }
 
@@ -546,24 +657,28 @@ int main(int argc, char *argv[])
 
 	int fd = server ? StartServer(s_ip, s_port) : StartFakeTcp(c_ip, c_port);
 	ikcpcb* ikcpcb;
-	std::cout << "fd: " << fd << std::endl;
+	tcp_def* def;
+	// std::cout << "fd: " << fd << std::endl;
 	if (fd < 0)
 	{
 		return -1;
 	}
 	if (server)
 	{
-		tcp_def* def = new tcp_def; 
+		def = new tcp_def; 
 		def->fd = fd;
 		SetAddr(s_ip, s_port, &def->local_addr);
 		SetAddr(c_ip, c_port, &def->remote_addr);
 		ikcpcb = ikcp_create(0x1, (void*)def);
 		ServerRun(fd, ikcpcb);
+		while (true) {
+			sleep(1);
+		}
 	}
 	else
 	{
 		//testClient(fd);
-		tcp_def* def = new tcp_def; 
+		def = new tcp_def; 
 		def->fd = fd;
 		SetAddr(c_ip, c_port, &def->local_addr);
 		SetAddr(s_ip, s_port, &def->remote_addr);
@@ -571,12 +686,13 @@ int main(int argc, char *argv[])
 		ClientRun(fd, ikcpcb);
 	}
 
-	std::cout << "looping" << std::endl;
-	while (true) {
-		sleep(1);
-	}
-	std::cout << "stop main: " << std::endl;
+	// std::cout << "looping" << std::endl;
+
+	// std::cout << "stop main: " << std::endl;
+	sleep(5);
+	should_exit = true;
 	Stop(fd);
-	free(ikcpcb);
+	delete def;
+	ikcp_release(ikcpcb);
 	return 0;
 }

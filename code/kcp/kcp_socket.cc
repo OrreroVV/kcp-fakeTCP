@@ -15,11 +15,11 @@ void prase_tcp_packet(const char* buffer,size_t len, tcp_info* info) {
     memcpy(&tcp_header, buffer + sizeof(ip_header), sizeof(tcphdr));
 
     memset(info, 0, sizeof(tcp_info));
-    info->ack = tcp_header.ack;
-    info->ack_seq = tcp_header.ack_seq;
+    info->ack = ntohs(tcp_header.ack);
+    info->ack_seq = ntohl(tcp_header.ack_seq);
     info->port_src = ntohs(tcp_header.th_sport);
     info->port_dst = ntohs(tcp_header.th_dport);
-
+    info->seq = ntohl(tcp_header.seq);
 }
 
 

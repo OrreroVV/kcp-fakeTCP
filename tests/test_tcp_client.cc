@@ -99,8 +99,8 @@ struct tcp_def {
 
 int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 	tcp_def* def =  (tcp_def*)user;
+    // std::cout << "send_cb fd: "<< def->fd << std::endl;
 
-    std::cout << "send_cb" << std::endl;
     int sended = 0;
     while (sended < len) {
         size_t s = (len - sended);
@@ -111,9 +111,9 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
         struct sockaddr_in dest;
 		SetAddr(inet_ntoa(def->remote_addr.sin_addr), def->remote_addr.sin_port, &dest);				
 
-		//ssize_t ret = sendto(def->fd, buffer + sended, data_len, 0, (struct sockaddr*)&dest, sizeof(struct sockaddr));
-		ssize_t ret = send(def->fd, buffer + sended, data_len, 0);
-		std::cout << "ret: " << ret << std::endl;
+		ssize_t ret = sendto(def->fd, buffer + sended, data_len, 0, (struct sockaddr*)&dest, sizeof(struct sockaddr));
+		//ssize_t ret = send(def->fd, buffer + sended, data_len, 0);
+		// std::cout << "send ret: " << ret << std::endl;
 		if (ret < 0) {
 			perror("sendto");
 			break;
@@ -202,10 +202,11 @@ void* run_tcp_client(void * args) {
     socklen_t src_len = sizeof(struct sockaddr_in);
 
     while (true) {
-        ikcp_update(m_kcp, KCP::iclock());
+        //ikcp_update(m_kcp, KCP::iclock());
         struct sockaddr_in src;
         memset(&src, 0, src_len);
         len = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&from_addr, &from_size);
+        //std::cout << "len: " << len << std::endl;
         if (len > 0) {
             KCP::tcp_info info;
             KCP::prase_tcp_packet(buffer, len, &info);
@@ -230,6 +231,15 @@ void* run_tcp_client(void * args) {
 	close(fd);
     delete param;
     pthread_exit(NULL);
+}
+
+void* run_loop(void* args) {
+    cb_params * param = (cb_params*)args;
+    ikcpcb* m_kcp = param->m_kcp;
+    while (true) {
+        ikcp_update(m_kcp, KCP::iclock());
+        KCP::isleep(1);
+    }
 }
 
 
@@ -263,10 +273,18 @@ void kcp_client_start(int fd, ikcpcb* m_kcp) {
 			break;
 	}
 
-    pthread_t tid;
+
     cb_params* params = new cb_params;
     params->fd = fd;
     params->m_kcp = m_kcp;
+
+    pthread_t loop_tid;
+    if (pthread_create(&loop_tid, NULL, run_loop, params) != 0) {
+        perror("pthread_create");
+    }
+
+
+    pthread_t tid;
     if (pthread_create(&tid, NULL, run_tcp_client, params) != 0) {
         perror("pthread_create");
     };
@@ -284,17 +302,18 @@ int main() {
         return -1;
     }
 
-    // 设置 socket 为非阻塞模式
-    int flags = fcntl(sock, F_GETFL, 0);
-    if (flags == -1) {
-        std::cerr << "Failed to get socket flags" << std::endl;
-        return -1;
-    }
+    // // 设置 socket 为非阻塞模式
+    // int flags = fcntl(sock, F_GETFL, 0);
+    // if (flags == -1) {
+    //     std::cerr << "Failed to get socket flags" << std::endl;
+    //     return -1;
+    // }
 
-    if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1) {
-        std::cerr << "Failed to set non-blocking mode" << std::endl;
-        return -1;
-    }
+    // // 设置 socket 为非阻塞模式
+    // if (fcntl(sock, F_SETFL, O_NONBLOCK) == -1) {
+    //     std::cerr << "Failed to set non-blocking mode" << std::endl;
+    //     return -1;
+    // }
 
     // 设置服务器地址结构
     serv_addr.sin_family = AF_INET;
@@ -307,23 +326,84 @@ int main() {
     }
 
  // 尝试连接到服务器
-    int result = connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
-    if (result == -1) {
-        if (errno == EINPROGRESS) {
-            // 连接正在进行中，稍后再检查连接状态
-            std::cout << "Connection in progress..." << std::endl;
-        } else {
-            // 其他连接错误
-            std::cerr << "Connection failed: " << strerror(errno) << std::endl;
-            return -1;
-        }
-    } else {
-        // 连接成功
-        std::cout << "Connected to server!" << std::endl;
+    int connect_status = connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    if (connect_status == -1 && errno != EINPROGRESS) {
+        exit(1);
     }
-    sleep(2);
+    
+
+    // // 使用select进行非阻塞I/O操作
+    // fd_set read_fds;
+    // fd_set write_fds;
+    // struct timeval timeout;
+    // char buffer[1024];
+    // int stdin_fd = fileno(stdin);
+    // int max_fd = sock + 1;
+
+    //  while (true) {
+    //     FD_ZERO(&read_fds);
+    //     FD_ZERO(&write_fds);
+
+    //     FD_SET(sock, &read_fds);
+    //     FD_SET(stdin_fd, &read_fds);
+
+    //     if (connect_status == -1) {
+    //         FD_SET(sock, &write_fds);
+    //     }
+
+    //     timeout.tv_sec = 5; // 设置超时时间为5秒
+    //     timeout.tv_usec = 0;
+
+    //     int select_status = select(max_fd, &read_fds, &write_fds, NULL, &timeout);
+    //     if (select_status == -1) {
+    //         perror("Error in select");
+    //         break;
+    //     } else if (select_status == 0) {
+    //         std::cout << "Timeout occurred\n";
+    //         break;
+    //     }
+
+    //     // 检查套接字是否可读
+    //     if (FD_ISSET(sock, &read_fds)) {
+    //         int bytes_received = recv(sock, buffer, sizeof(buffer), 0);
+    //         if (bytes_received > 0) {
+    //             buffer[bytes_received] = '\0';
+    //             std::cout << "Received: " << buffer << std::endl;
+    //         } else if (bytes_received == 0) {
+    //             std::cout << "Server disconnected\n";
+    //             break;
+    //         } else {
+    //             perror("Error receiving data");
+    //             break;
+    //         }
+    //     }
+
+    //     // 检查套接字是否可写
+    //     if (FD_ISSET(sock, &write_fds)) {
+    //         int optval;
+    //         socklen_t optlen = sizeof(optval);
+    //         if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &optval, &optlen) == 0) {
+    //             if (optval == 0) {
+    //                 std::cout << "Connected to server successfully\n";
+    //                 connect_status = 0;
+    //             } else {
+    //                 std::cerr << "Error connecting to server\n";
+    //                 break;
+    //             }
+    //         }
+    //     }
+
+    //     // 检查标准输入是否可读
+    //     if (FD_ISSET(stdin_fd, &read_fds)) {
+    //         fgets(buffer, sizeof(buffer), stdin);
+    //         send(sock, buffer, strlen(buffer), 0);
+    //     }
+    // }
+    // sleep(2);
+
 	ikcpcb* ikcpcb;
 	tcp_def* def = new tcp_def; 
+    def->fd = sock;
     SetAddr(c_ip, c_port, &def->local_addr);
     SetAddr(s_ip, s_port, &def->remote_addr);
     ikcpcb = ikcp_create(0x1, (void*)def);
@@ -334,7 +414,11 @@ int main() {
     std::string str;
     std::cout << "send: ";
     while (std::cin >> str) {
-        ikcp_input(ikcpcb, str.c_str(), str.size());
+        int ret = ikcp_send(ikcpcb, str.c_str(), str.size());
+        std::cout << "ret: " << ret << std::endl;
+        if (ret < 0) { 
+            perror("ikcp_input");
+        }
         //send(sock, str.c_str(), str.size(), 0);
     }
 

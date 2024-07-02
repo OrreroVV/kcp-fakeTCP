@@ -266,17 +266,17 @@ int StartServer(const char *ip, short port) {
 		return -1;
 	}
 
-	    // 设置 socket 为非阻塞模式
-    int flags = fcntl(listen_sock, F_GETFL, 0);
-    if (flags == -1) {
-        std::cerr << "Failed to get socket flags" << std::endl;
-        return -1;
-    }
+	//     // 设置 socket 为非阻塞模式
+    // int flags = fcntl(listen_sock, F_GETFL, 0);
+    // if (flags == -1) {
+    //     std::cerr << "Failed to get socket flags" << std::endl;
+    //     return -1;
+    // }
 
-    if (fcntl(listen_sock, F_SETFL, flags | O_NONBLOCK) == -1) {
-        std::cerr << "Failed to set non-blocking mode" << std::endl;
-        return -1;
-    }
+    // if (fcntl(listen_sock, F_SETFL, flags | O_NONBLOCK) == -1) {
+    //     std::cerr << "Failed to set non-blocking mode" << std::endl;
+    //     return -1;
+    // }
 
 
 	int optval = 1;
@@ -297,7 +297,7 @@ int StartServer(const char *ip, short port) {
 		perror("listen");
 	}
 
-	sleep(4);
+	//sleep(4);
 	struct sockaddr_in peer;
 	socklen_t len = sizeof(peer);	
 	int fd = accept(listen_sock, (struct sockaddr *)&peer, &len);
@@ -306,7 +306,7 @@ int StartServer(const char *ip, short port) {
 	}
 
 	printf("new connect: %s:%d\n", inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
-	//close(listen_sock);
+	close(listen_sock);
 	return fd;
 }
 
@@ -359,7 +359,5 @@ ssize_t recv_from_addr(int sockfd, void *buf, size_t len, int flags,
 	} while (1);
 	return 0;
 }
-
-
 
 
