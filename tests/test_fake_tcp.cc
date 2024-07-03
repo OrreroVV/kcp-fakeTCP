@@ -13,6 +13,7 @@
 #include <netinet/tcp.h>
 #include <code/kcp/ikcp.h>
 #include <code/kcp/kcp_socket.h>
+#include "code/kcp/kcp_server.h"
 #include <thread>
 #include <fstream>
 #include <sstream>
@@ -32,6 +33,8 @@ static const char *c_ip = "127.0.0.1";
 static short c_port = 6668;
 static int ip_id = 0;
 
+static uint32_t seq = 0, server_ack_seq = 0;
+static int CLIENT_SUM_SEND = 0;
 
 struct tcp_def {
     int32_t fd;
@@ -100,32 +103,65 @@ void* run_tcp_server(void* args) {
 	// socklen_t from_size = sizeof(sockaddr_in);
 	// SetAddr(s_ip, s_port, &from_addr);
 	
+	std::string prefix_path = "/home/hzh/workspace/work/bin/";
+	std::string file_path;
 	ssize_t len = 0;
 	char buffer[2048] = { 0 };
-    std::ofstream file("received_file.txt", std::ios::out);
+    std::ofstream file;
     if (!file) {
         exit(1);
     }
+	bool read_file = false;
+	struct sockaddr_in src;
+	socklen_t src_len = sizeof(struct sockaddr_in);
+	SetAddr(c_ip, c_port, &src);
+	uint32_t file_sended = 0;
+	uint32_t file_size = 0;
 	while (!should_exit) {
 		ikcp_update(m_kcp, KCP::iclock());
-		struct sockaddr_in src;
-		socklen_t src_len = sizeof(struct sockaddr_in);
-		SetAddr(c_ip, c_port, &src);
 		len = recvfrom(fd, buffer, sizeof(buffer), 0, (sockaddr*)&src, &src_len);
 		// std::cout << "server recv len: " << len << std::endl;
 		if (len > 0) {
-
+			
 			int ret = ikcp_input(m_kcp, buffer, len);
 			// std::cout << "server ikcp_input ret: " << ret << std::endl;
 			if (ret < 0) {
 				printf("ikcp_input error: %d\n", ret);
 				continue;
 			}
+
+			// 发送8 + 128字节确认文件大小，文件名
 			char recv_buffer[2048] = { 0 };
 			ret = ikcp_recv(m_kcp, recv_buffer, len);
 			if(ret > 0) {
+				if (!read_file) {
+					assert(ret >= 128 + 8);
+					read_file = true;
+
+					memcpy(&file_size, recv_buffer, sizeof(uint32_t));
+					file_size = ntohl(file_size);
+					printf("File size: %u\n", file_size);
+
+					char file_name[128] {};
+					memcpy(file_name, recv_buffer + sizeof(uint32_t), sizeof(file_name));
+					printf("File name: %s\n", file_name);
+    				file_path = prefix_path + file_name;
+					file.open(file_path, std::ios::out | std::ios::binary);
+
+					if (len > 8 + 128) {
+						file.write(recv_buffer + 8 + 128, ret - (8 + 128));
+						file_sended += ret - (8 + 128);
+					}
+					continue;
+				}
 				file.write(recv_buffer, ret);
-				printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
+				file_sended += ret;
+				if (file_sended >= file_size) {
+					printf("File %s received completely\n", file_path.c_str());
+					break;
+				}
+				// printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
+
 			} else if (!ret) {
 				break;
 			} else {
@@ -145,6 +181,7 @@ void* run_tcp_server(void* args) {
         param = nullptr;
 	}
 	file.close();
+	should_exit = true;
 	return nullptr;
 }
 
@@ -183,15 +220,18 @@ void start_kcp_server(int fd, ikcpcb* m_kcp) {
 	param->fd = fd;
 	param->m_kcp = m_kcp;
 
-
 	pthread_t server_tid;
 	if (pthread_create(&server_tid, NULL, server_loop, param) != 0) {
         perror("pthread_create failed");
         return;
     }
 
+
+	cb_params* param1 = new cb_params;
+	param1->fd = fd;
+	param1->m_kcp = m_kcp;
     pthread_t tid;
-	if (pthread_create(&tid, NULL, run_tcp_server, param) != 0) {
+	if (pthread_create(&tid, NULL, run_tcp_server, param1) != 0) {
         perror("pthread_create failed");
         return;
     }
@@ -203,13 +243,13 @@ void ServerRun(int fd, ikcpcb* m_kcp)
 
 	std::string msg;
 	// std::cout << "send: ";
-    while (std::cin >> msg) {
-        int ret = ikcp_send(m_kcp, msg.c_str(), msg.size());
-        // std::cout << "data_size: " << ret << std::endl;
-		if (ret < 0) {
-			perror("send");
-		}
-    }
+    // while (std::cin >> msg) {
+    //     int ret = ikcp_send(m_kcp, msg.c_str(), msg.size());
+    //     // std::cout << "data_size: " << ret << std::endl;
+	// 	if (ret < 0) {
+	// 		perror("send");
+	// 	}
+    // }
 }
 
 enum conn_state {
@@ -334,8 +374,8 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 		std::memset(&tcp_header, 0, sizeof(tcp_header));
 		tcp_header.source = htons(c_port);  // 源端口号
 		tcp_header.dest = htons(s_port);    // 目标端口号
-		tcp_header.seq = htonl(KCP::seq + KCP::CLIENT_SUM_SEND);          // 序列号
-		tcp_header.ack_seq = htonl(KCP::server_ack_seq);      // 确认号
+		tcp_header.seq = htonl(seq + CLIENT_SUM_SEND);          // 序列号
+		tcp_header.ack_seq = htonl(server_ack_seq);      // 确认号
 		tcp_header.doff = 5;                // TCP头部长度
 		tcp_header.fin = 0;                 
 		tcp_header.syn = 0;                 // SYN标志位
@@ -369,7 +409,7 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 			perror("sendto");
 			break;
 		}
-		KCP::CLIENT_SUM_SEND += data_len;
+		CLIENT_SUM_SEND += data_len;
 
         // ssize_t ret = send(def->fd, buffer + sended, s, 0);
         // if(ret < 0){
@@ -414,7 +454,7 @@ void run_tcp_client(int fd, ikcpcb* m_kcp) {
 					continue;
 				}
 				// std::cout << info.port_src << " " << info.port_dst << " " <<  info.seq << " " << info.ack_seq << std::endl;
-				KCP::server_ack_seq = info.seq + len - (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr));
+				server_ack_seq = info.seq + len - (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr));
 				// std::cout << "client recv len: " << len << std::endl;
 				//ikcp_send(m_kcp, "", 0);
 				if (len > (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr))) {
@@ -505,27 +545,27 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 		
 
 		if (s_state == tcp_closed) {
-			KCP::seq = 12345;
+			seq = 12345;
 			syn = 1;
 			s_state = tcp_syn_sent;
 		} else if (s_state == tcp_syn_sent) {
-			if (info.ack_seq != KCP::seq + 1) {
+			if (info.ack_seq != seq + 1) {
 				printf("invalid ack_seq: %d\n", info.ack_seq);
 				break;
 			}
 
-			KCP::seq++;
+			seq++;
 			syn = 0;
 			ack_seq = info.seq + 1;
 			ack = 1;
 			s_state = tcp_established;
 		} else {
 			ack_seq = info.seq + info.data_len;
-			KCP::seq += _s;
+			seq += _s;
 		}
 
 
-		int total = BuildPkt(data, _s, &client_in_addr, c_port, &server_in_addr, s_port, KCP::seq, ack_seq, syn, ack);
+		int total = BuildPkt(data, _s, &client_in_addr, c_port, &server_in_addr, s_port, seq, ack_seq, syn, ack);
 
 
 
@@ -536,15 +576,30 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 		}
 
 		if (s_state == tcp_established) {
-			KCP::server_ack_seq = info.seq + 1;
+			server_ack_seq = info.seq + 1;
 			kcp_client_start(fd, m_kcp);
 
-			std::string filename = "/home/hzh/workspace/work/logs/data.txt";
+			std::string filepath = "/home/hzh/workspace/work/logs/data.txt";
 			// 打开文件并发送内容
-			std::ifstream file(filename, std::ios::in | std::ios::binary);
+			std::string filename = filepath.substr(filepath.find_last_of("/") + 1);
+
+			std::ifstream file(filepath, std::ios::in | std::ios::binary);
 			if (!file) {
 				exit(1);
 			}
+		
+			char temp[8 + 128] {};
+			 // 获取文件大小
+			file.seekg(0, std::ios::end);
+			uint32_t file_size = file.tellg();
+			file.seekg(0, std::ios::beg);
+
+			file_size = htonl(file_size);
+			memcpy(temp, &file_size, sizeof(uint32_t));
+			memcpy(temp + sizeof(uint32_t), &filename[0], filename.size());
+			ikcp_send(m_kcp, temp, sizeof(temp));
+
+
 			char buf[1024];
 			size_t BUFFER_SIZE = 1024;
 			while (!file.eof()) {
@@ -589,7 +644,7 @@ void ClientRun(int fd, ikcpcb* m_kcp)
 				std::memset(&tcp_header, 0, sizeof(tcp_header));
 				tcp_header.source = htons(c_port);  // 源端口号
 				tcp_header.dest = htons(s_port);    // 目标端口号
-				tcp_header.seq = htonl(KCP::seq + sum);          // 序列号
+				tcp_header.seq = htonl(seq + sum);          // 序列号
 				tcp_header.ack_seq = htonl(info.seq + 1);      // 确认号
 				tcp_header.doff = 5;                // TCP头部长度
 				tcp_header.fin = 0;                 
@@ -658,6 +713,9 @@ int main(int argc, char *argv[])
 	int fd = server ? StartServer(s_ip, s_port) : StartFakeTcp(c_ip, c_port);
 	ikcpcb* ikcpcb;
 	tcp_def* def;
+	KCP::KcpHandleClient * handleClient;
+	
+	handleClient = new KCP::KcpHandleClient(fd, s_port, s_ip, c_port, c_ip);
 	// std::cout << "fd: " << fd << std::endl;
 	if (fd < 0)
 	{
@@ -665,15 +723,16 @@ int main(int argc, char *argv[])
 	}
 	if (server)
 	{
-		def = new tcp_def; 
-		def->fd = fd;
-		SetAddr(s_ip, s_port, &def->local_addr);
-		SetAddr(c_ip, c_port, &def->remote_addr);
-		ikcpcb = ikcp_create(0x1, (void*)def);
-		ServerRun(fd, ikcpcb);
-		while (true) {
-			sleep(1);
-		}
+		handleClient->start_kcp_server();
+		// def = new tcp_def; 
+		// def->fd = fd;
+		// SetAddr(s_ip, s_port, &def->local_addr);
+		// SetAddr(c_ip, c_port, &def->remote_addr);
+		// ikcpcb = ikcp_create(0x1, (void*)def);
+		// ServerRun(fd, ikcpcb);
+		// while (true) {
+		// 	sleep(1);
+		// }
 	}
 	else
 	{
@@ -684,6 +743,12 @@ int main(int argc, char *argv[])
 		SetAddr(s_ip, s_port, &def->remote_addr);
 		ikcpcb = ikcp_create(0x1, (void*)def);
 		ClientRun(fd, ikcpcb);
+		sleep(5);
+		should_exit = true;
+		if (def) {
+			delete def;
+		}
+		ikcp_release(ikcpcb);
 	}
 
 	// std::cout << "looping" << std::endl;
@@ -692,7 +757,8 @@ int main(int argc, char *argv[])
 	sleep(5);
 	should_exit = true;
 	Stop(fd);
-	delete def;
-	ikcp_release(ikcpcb);
+	if (handleClient) {
+		delete handleClient;
+	}
 	return 0;
 }

@@ -12,6 +12,25 @@
 #include <arpa/inet.h>
 #include <fcntl.h> // for open
 #include <algorithm>
+#include "code/fake_tcp.h"
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <string>
+#include <cstring>
+#include <cstdlib>
+#include <pcap.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <code/kcp/ikcp.h>
+#include <code/kcp/kcp_socket.h>
+#include <thread>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 
 #include "ikcp.h"
 
@@ -30,8 +49,6 @@
 
 namespace KCP {
 
-static uint32_t seq = 0, server_ack_seq = 0;
-static int CLIENT_SUM_SEND = 0;
 
 typedef struct _UDP_Def_ {
     int32_t fd;
@@ -53,9 +70,21 @@ typedef struct __TCP_INFO__ {
 	struct in_addr ip_dst;
 } tcp_info;
 
+
+struct tcp_def {
+    int32_t fd;
+    struct sockaddr_in local_addr;
+    struct sockaddr_in remote_addr;
+};
+
+typedef struct __cb_params__ {
+	int fd;
+	ikcpcb* m_kcp;
+} cb_params;
+
 void prase_tcp_packet(const char* buffer,size_t len, tcp_info* info);
 
-
+void setAddr(const char *ip, short port, struct sockaddr_in* addr);
 
 
 void fake_tcp_send(const char* buffer, size_t len, tcp_info* info, size_t sended);

@@ -22,6 +22,13 @@ void prase_tcp_packet(const char* buffer,size_t len, tcp_info* info) {
     info->seq = ntohl(tcp_header.seq);
 }
 
+void setAddr(const char *ip, short port, struct sockaddr_in* addr) {
+	assert(addr);
+	memset(addr, 0, sizeof(*addr));
+	addr->sin_family = AF_INET;
+	addr->sin_port = htons(port);
+	addr->sin_addr.s_addr = inet_addr(ip);
+};
 
 int32_t udp_Create(UDP_Def *udp, uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) {
     if (udp == NULL) {
