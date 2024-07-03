@@ -91,6 +91,20 @@ void fake_tcp_send(const char* buffer, size_t len, tcp_info* info, size_t sended
 
 
 
+uint16_t calculate_ip_checksum(const struct iphdr *iphdr_packet);
+
+
+struct pseudo_header
+{
+	uint32_t source_address;
+	uint32_t dest_address;
+	uint8_t placeholder;
+	uint8_t protocol;
+	uint16_t tcp_length;
+};
+
+uint16_t calculate_tcp_checksum(const struct iphdr *iphdr_packet, const struct tcphdr *tcphdr_packet, const char *data, size_t data_len);
+
 
 
 

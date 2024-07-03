@@ -17,6 +17,7 @@ set(LIB_SRC
     code/kcp/kcp_socket.cc
     code/fake_tcp.cc
     code/kcp/kcp_server.cc
+    code/kcp/kcp_client.cc
     # code/kcp_inc.cc
     # code/kcp_client.cc
     )

@@ -40,12 +40,8 @@ KcpHandleClient::~KcpHandleClient() {
 
 
 
-void* KcpHandleClient::run_tcp_server(void* args) {
+void* KcpHandleClient::run_tcp_server() {
     std::cout << "run_tcp_server" << std::endl;
-	cb_params* param = (cb_params*) args;
-
-	int fd = param->fd;
-	ikcpcb* m_kcp = param->m_kcp;
 	assert(fd && m_kcp);
 	// struct sockaddr_in from_addr;
 	// socklen_t from_size = sizeof(sockaddr_in);
@@ -65,7 +61,7 @@ void* KcpHandleClient::run_tcp_server(void* args) {
 	setAddr(c_ip, c_port, &src);
 	uint32_t file_sended = 0;
 	uint32_t file_size = 0;
-	while (looping) {
+	while (!stopFlag.load()) {
 		ikcp_update(m_kcp, KCP::iclock());
 		len = recvfrom(fd, buffer, sizeof(buffer), 0, (sockaddr*)&src, &src_len);
 		// std::cout << "server recv len: " << len << std::endl;
@@ -118,18 +114,14 @@ void* KcpHandleClient::run_tcp_server(void* args) {
 		} else if (!len) {
 			break;
 		} else {
-			perror("ikcp_recv");
+			perror("recvfrom");
 		}
 		KCP::isleep(10);
 	}
 
 	// std::cout << "server: close --------------------------" << std::endl;
-	if (param) {
-		delete param;
-        param = nullptr;
-	}
+
 	file.close();
-	looping = false;
 	return nullptr;
 }
 
@@ -164,14 +156,22 @@ void KcpHandleClient::start_kcp_server() {
             break;
     }
 
-    looping = true;
-    pthread_t tid;
-	if (pthread_create(&tid, NULL, start_tcp_server_thread, this) != 0) {
-        perror("pthread_create failed");
-        return;
-    }
+
+    stopFlag.store(false);
+	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
+	tcp_server_thread->detach(); // 将线程设置为分离状态
+
+    // pthread_t tid;
+	// if (pthread_create(&tid, NULL, start_tcp_server_thread, this) != 0) {
+    //     perror("pthread_create failed");
+    //     return;
+    // }
 }
 
+void KcpHandleClient::close() {
+	stopFlag.store(true);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+}
 
 
 }

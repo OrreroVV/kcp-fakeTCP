@@ -14,6 +14,7 @@
 #include <code/kcp/ikcp.h>
 #include <code/kcp/kcp_socket.h>
 #include "code/kcp/kcp_server.h"
+#include "code/kcp/kcp_client.h"
 #include <thread>
 #include <fstream>
 #include <sstream>
@@ -787,8 +788,8 @@ int main(int argc, char *argv[])
 
 	int sock = server ? StartServer(s_ip, s_port) : StartFakeTcp(c_ip, c_port);
 
-	ikcpcb *ikcpcb;
-	tcp_def *def;
+	// ikcpcb *ikcpcb;
+	// tcp_def *def;
 	// std::cout << "fd: " << fd << std::endl;
 
 
@@ -875,21 +876,22 @@ int main(int argc, char *argv[])
 		// 	sleep(1);
 		// }
 	}
-	else
-	{
-		// testClient(fd);
-		def = new tcp_def;
-		def->fd = sock;
-		SetAddr(c_ip, c_port, &def->local_addr);
-		SetAddr(s_ip, s_port, &def->remote_addr);
-		ikcpcb = ikcp_create(0x1, (void *)def);
-		ClientRun(sock, ikcpcb);
-		sleep(5);
-		should_exit = true;
-		if (def) {
-			delete def;
-		}
-		ikcp_release(ikcpcb);
+	else {
+		KCP::KcpClient* client = new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip);
+		client->startClient();
+		// // testClient(fd);
+		// def = new tcp_def;
+		// def->fd = sock;
+		// SetAddr(c_ip, c_port, &def->local_addr);
+		// SetAddr(s_ip, s_port, &def->remote_addr);
+		// ikcpcb = ikcp_create(0x1, (void *)def);
+		// ClientRun(sock, ikcpcb);
+		// sleep(5);
+		// should_exit = true;
+		// if (def) {
+		// 	delete def;
+		// }
+		// ikcp_release(ikcpcb);
 	}
 
 	// std::cout << "looping" << std::endl;

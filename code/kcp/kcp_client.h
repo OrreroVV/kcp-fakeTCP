@@ -1,64 +1,60 @@
-#ifndef __KCP_HANDLE_CLIENT__
-#define __KCP_HANDLE_CLIENT__
+#ifndef __KCP_CLIENT__
+#define __KCP_CLIENT__
 
 #include <stdint.h>
 #include <string>
 #include <memory>
+#include <atomic>
 #include "ikcp.h"
 #include "kcp_socket.h"
 
+#define UDP_MTU 1400
+
 namespace KCP {
 
-struct tcp_def {
-    int32_t fd;
-    struct sockaddr_in local_addr;
-    struct sockaddr_in remote_addr;
-};
 
-typedef struct __cb_params__ {
-	int fd;
-	ikcpcb* m_kcp;
-} cb_params;
+int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user);
 
-class KcpHandleClient {
+class KcpClient {
 public:
-    typedef std::shared_ptr<KcpHandleClient> ptr;
+    typedef std::shared_ptr<KcpClient> ptr;
+    enum conn_state {
+        tcp_closed = 0,
+        tcp_syn_sent = 1,
+        tcp_established = 2,
+    };
 
-    KcpHandleClient();
+    KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip, const char* s_ip);
+    ~KcpClient();
+    
+    void startClient();
+    void run_tcp_client();
+    void *client_loop();
+    void kcp_client_start();
 
+    void Close();
 
-    void SetAddr(const char *ip, short port, struct sockaddr_in* addr);
-
-
+    int fd;
+    int ip_id;
+    int c_port;
+    int s_port;
+    const char* c_ip;
+    const char* s_ip;
+    int s_state;
     ikcpcb* m_kcp;
-    tcp_def* tcp_def;
+
+    uint32_t seq;
+    uint32_t server_ack_seq;
+    uint32_t CLIENT_SUM_SEND;
+
+    std::atomic<bool> stopFlag;
+    std::unique_ptr<std::thread> kcp_loop_thread;
+    std::unique_ptr<std::thread> kcp_client_thread;
 private:
 
 };
 
 
-// class KCP_Client {
-// public:
-
-//     KCP_Client() {};
-//     ~KCP_Client() {
-//         delete m_kcp;
-//         delete udp_def;
-//     };
-
-//     void create(int mod, IUINT32 conv, char* remoteIp, uint16_t remotePort, uint16_t localPort);
-//     int sendData(std::string data);
-
-//     inline bool getIsLoop() const { return m_isLoop; };
-//     inline void setIsLoop(bool isLoop) { m_isLoop = isLoop; };
-
-//     inline UDP_Def* getUdpDef() const { return udp_def; };
-//     inline ikcpcb* getKcp() const { return m_kcp; };
-
-//     bool m_isLoop;
-//     ikcpcb* m_kcp;  
-//     UDP_Def* udp_def;
-// };
 
 }
 

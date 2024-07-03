@@ -30,6 +30,82 @@ void setAddr(const char *ip, short port, struct sockaddr_in* addr) {
 	addr->sin_addr.s_addr = inet_addr(ip);
 };
 
+uint16_t calculate_ip_checksum(const struct iphdr *iphdr_packet) {
+	uint32_t sum = 0;
+	int length = iphdr_packet->ihl * 4;
+	const uint16_t *buf = reinterpret_cast<const uint16_t *>(iphdr_packet);
+
+	for (int i = 0; i < length / 2; ++i)
+	{
+		sum += ntohs(buf[i]);
+	}
+
+	if (length % 2)
+	{
+		sum += static_cast<uint16_t>(*(reinterpret_cast<const uint8_t *>(iphdr_packet) + length - 1));
+	}
+
+	while (sum >> 16)
+	{
+		sum = (sum & 0xffff) + (sum >> 16);
+	}
+
+	return static_cast<uint16_t>(~sum);
+}
+
+
+uint16_t calculate_tcp_checksum(const struct iphdr *iphdr_packet, const struct tcphdr *tcphdr_packet, const char *data, size_t data_len) {
+	uint32_t sum = 0;
+
+	pseudo_header pseudo_hdr;
+	pseudo_hdr.source_address = iphdr_packet->saddr;
+	pseudo_hdr.dest_address = iphdr_packet->daddr;
+	pseudo_hdr.placeholder = 0;
+	pseudo_hdr.protocol = IPPROTO_TCP;
+	pseudo_hdr.tcp_length = htons(sizeof(struct tcphdr) + data_len);
+
+	const uint16_t *pseudo_header_words = reinterpret_cast<const uint16_t *>(&pseudo_hdr);
+	int pseudo_length = sizeof(pseudo_hdr);
+	for (int i = 0; i < pseudo_length / 2; ++i)
+	{
+		sum += ntohs(pseudo_header_words[i]);
+	}
+
+	const uint16_t *tcp_packet = reinterpret_cast<const uint16_t *>(tcphdr_packet);
+	int tcp_length = sizeof(struct tcphdr);
+	for (int i = 0; i < tcp_length / 2; ++i)
+	{
+		sum += ntohs(tcp_packet[i]);
+	}
+
+	char *new_data = new char[data_len + 1];
+	std::memcpy(new_data, data, data_len);
+	if (data_len & 1)
+	{
+		new_data[data_len] = 0;
+		data_len++;
+	}
+
+	const uint16_t *data_packet = reinterpret_cast<const uint16_t *>(new_data);
+	int data_length = data_len;
+	for (int i = 0; i < data_length / 2; ++i)
+	{
+		sum += ntohs(data_packet[i]);
+	}
+
+	while (sum >> 16)
+	{
+		sum = (sum & 0xffff) + (sum >> 16);
+	}
+
+	delete[] new_data;
+	return static_cast<uint16_t>(~sum);
+}
+
+
+
+
+
 int32_t udp_Create(UDP_Def *udp, uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) {
     if (udp == NULL) {
         return -1;
