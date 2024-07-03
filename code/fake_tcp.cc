@@ -297,17 +297,17 @@ int StartServer(const char *ip, short port) {
 		perror("listen");
 	}
 
-	//sleep(4);
-	struct sockaddr_in peer;
-	socklen_t len = sizeof(peer);	
-	int fd = accept(listen_sock, (struct sockaddr *)&peer, &len);
-	if (fd < 0) {
-		perror("accept");
-	}
+	// //sleep(4);
+	// struct sockaddr_in peer;
+	// socklen_t len = sizeof(peer);	
+	// int fd = accept(listen_sock, (struct sockaddr *)&peer, &len);
+	// if (fd < 0) {
+	// 	perror("accept");
+	// }
 
-	printf("new connect: %s:%d\n", inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
-	close(listen_sock);
-	return fd;
+	// printf("new connect: %s:%d\n", inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
+	// close(listen_sock);
+	return listen_sock;
 }
 
 int StartClient(const char *ip, short port) {
