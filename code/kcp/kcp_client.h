@@ -24,7 +24,7 @@ public:
         tcp_established = 2,
     };
 
-    KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip, const char* s_ip);
+    KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip, const char* s_ip, std::string file_path);
     ~KcpClient();
     
     void startClient();
@@ -40,6 +40,7 @@ public:
     int s_port;
     const char* c_ip;
     const char* s_ip;
+    std::string file_path;
     int s_state;
     ikcpcb* m_kcp;
 

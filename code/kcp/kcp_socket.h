@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h> // for open
 #include <algorithm>
-#include "code/fake_tcp.h"
+#include "code/kcp/fake_tcp.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -48,13 +48,22 @@
 #endif
 
 namespace KCP {
+// typedef struct _UDP_Def_ {
+//     int32_t fd;
+//     struct sockaddr_in local_addr;
+//     struct sockaddr_in remote_addr;
+// } UDP_Def;
 
+// struct tcp_def {
+//     int32_t fd;
+//     struct sockaddr_in local_addr;
+//     struct sockaddr_in remote_addr;
+// };
 
-typedef struct _UDP_Def_ {
-    int32_t fd;
-    struct sockaddr_in local_addr;
-    struct sockaddr_in remote_addr;
-} UDP_Def;
+// typedef struct __cb_params__ {
+// 	int fd;
+// 	ikcpcb* m_kcp;
+// } cb_params;
 
 typedef struct __TCP_INFO__ {
     uint8_t proto;
@@ -70,17 +79,6 @@ typedef struct __TCP_INFO__ {
 	struct in_addr ip_dst;
 } tcp_info;
 
-
-struct tcp_def {
-    int32_t fd;
-    struct sockaddr_in local_addr;
-    struct sockaddr_in remote_addr;
-};
-
-typedef struct __cb_params__ {
-	int fd;
-	ikcpcb* m_kcp;
-} cb_params;
 
 void prase_tcp_packet(const char* buffer,size_t len, tcp_info* info);
 
@@ -109,9 +107,9 @@ uint16_t calculate_tcp_checksum(const struct iphdr *iphdr_packet, const struct t
 
 
 
-int32_t udp_Create(UDP_Def *udp, uint32_t remoteIP, uint16_t remotePort, uint16_t localPort);
+// int32_t udp_Create(UDP_Def *udp, uint32_t remoteIP, uint16_t remotePort, uint16_t localPort);
 
-int udp_sendData_cb(const char *buffer, int len, ikcpcb *kcp, void *user);
+// int udp_sendData_cb(const char *buffer, int len, ikcpcb *kcp, void *user);
 
 /* get system time 
     sec:  s

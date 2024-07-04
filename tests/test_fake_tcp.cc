@@ -1,4 +1,4 @@
-#include "code/fake_tcp.h"
+#include "code/kcp/fake_tcp.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -31,10 +31,7 @@
 #include <fcntl.h>
 #include <vector>
 
-static const char *s_ip = "127.0.0.1";
-static short s_port = 6666;
-static const char *c_ip = "127.0.0.1";
-static short c_port = 6668;
+
 
 #define UDP_MTU 1400
 
@@ -780,10 +777,25 @@ int setNonBlocking(int fd) {
 
 int main(int argc, char *argv[])
 {
+	static const char *s_ip = "127.0.0.1";
+	static const char *c_ip = "127.0.0.1";
+	static short s_port = 6666;
+	static short c_port = 6668;
+
+	std::string file_path;
 	int server = 0;
 	if (argc >= 2 && strncmp(argv[1], "-s", 2) == 0)
 	{
 		server = 1;
+	}
+	
+	if (argc >= 4) {
+		// if (argc >= 4 && strncmp(argv[2], "-p", 2) == 0) {
+		// 	c_port = atoi(argv[3]);
+		// }
+		file_path = argv[2];
+		c_port = atoi(argv[3]);
+		printf("%d %s\n", c_port, file_path.c_str());
 	}
 
 	printf("run in %s mode...\n", server ? "server" : "client");
@@ -874,7 +886,11 @@ int main(int argc, char *argv[])
 		// }
 	}
 	else {
-		KCP::KcpClient* client = new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip);
+		if (file_path.empty()) {
+			file_path = "/home/hzh/workspace/work/logs/data.txt";
+		}
+
+		KCP::KcpClient* client = new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip, file_path);
 		client->startClient();
 		// // testClient(fd);
 		// def = new tcp_def;

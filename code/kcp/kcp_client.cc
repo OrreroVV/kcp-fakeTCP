@@ -89,8 +89,8 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user)
 	return (size_t)sended;
 }
 
-KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip, const char* s_ip)
- 	:fd(fd), c_port(c_port), s_port(s_port), c_ip(c_ip), s_ip(s_ip){
+KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip, const char* s_ip, std::string file_path)
+ 	:fd(fd), c_port(c_port), s_port(s_port), c_ip(c_ip), s_ip(s_ip), file_path(file_path){
 	s_state = tcp_closed;
 	server_ack_seq = 0;
 	CLIENT_SUM_SEND = 0;
@@ -156,11 +156,10 @@ void KcpClient::startClient() {
 			server_ack_seq = info.seq + 1;
 			kcp_client_start();
 
-			std::string filepath = "/home/hzh/workspace/work/logs/data.txt";
 			// 打开文件并发送内容
-			std::string filename = filepath.substr(filepath.find_last_of("/") + 1);
+			std::string filename = file_path.substr(file_path.find_last_of("/") + 1);
 
-			std::ifstream file(filepath, std::ios::in | std::ios::binary);
+			std::ifstream file(file_path, std::ios::in | std::ios::binary);
 			if (!file) {
 				exit(1);
 			}
