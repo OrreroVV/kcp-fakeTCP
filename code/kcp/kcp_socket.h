@@ -66,10 +66,16 @@ namespace KCP {
 // } cb_params;
 
 typedef struct __TCP_INFO__ {
-    uint8_t proto;
-	uint8_t syn:1;
-	uint8_t ack:1;
-	uint8_t rst:1;
+    uint16_t proto;
+	uint16_t syn:1;
+	uint16_t ack:1;
+	uint16_t rst:1;
+    uint16_t fin:1;
+    uint16_t psh:1;
+    uint16_t urg:1;
+    uint16_t ece:1;
+    uint16_t cwr:1;
+    uint16_t  window_size;
 	uint16_t port_src;
 	uint16_t port_dst;
 	uint32_t seq;

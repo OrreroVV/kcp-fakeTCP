@@ -9,6 +9,11 @@
 #include "kcp_socket.h"
 
 #define UDP_MTU 1400
+#define IPV4_HEADER_SIZE 20
+#define TCP_HEADER_SIZE 20
+
+// 计算 IP + TCP 头部的总大小
+#define IP_TCP_HEADER_SIZE (IPV4_HEADER_SIZE + TCP_HEADER_SIZE)
 
 namespace KCP {
 
@@ -19,19 +24,30 @@ class KcpClient {
 public:
     typedef std::shared_ptr<KcpClient> ptr;
     enum conn_state {
-        tcp_closed = 0,
-        tcp_syn_sent = 1,
-        tcp_established = 2,
+        TCP_CLOSED = 0,
+        TCP_SYN_SEND = 1,
+        TCP_ESTABLISHED = 2,
+        TCP_FIN_WAIT1 ,
+        TCP_FIN_WAIT2 ,
+        TCP_CLOSE_WAIT,
+        TCP_CLOSING  ,
+    };
+
+    enum close_state {
     };
 
     KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip, const char* s_ip, std::string file_path);
     ~KcpClient();
     
-    void startClient();
+    void start_hand_shake();
+    void startHand();
+    void build_ip_tcp_header(char* data, const char* buffer, size_t data_len, int ack, int psh, int syn, int fin);
     void run_tcp_client();
     void *client_loop();
     void kcp_client_start();
-
+    void send_file();
+    void start_waving();
+    
     void Close();
 
     int fd;
@@ -45,8 +61,11 @@ public:
     ikcpcb* m_kcp;
 
     uint32_t seq;
-    uint32_t server_ack_seq;
-    uint32_t CLIENT_SUM_SEND;
+    // std::atomic<uint32_t> seq;
+    std::atomic<uint32_t> server_ack_seq;
+    // uint32_t server_ack_seq;
+    std::atomic<uint32_t> CLIENT_SUM_SEND;
+    //uint32_t CLIENT_SUM_SEND;
 
     std::atomic<bool> stopFlag;
     std::unique_ptr<std::thread> kcp_loop_thread;

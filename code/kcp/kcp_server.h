@@ -23,10 +23,9 @@ public:
     ~KcpHandleClient();
 
     void start_kcp_server();
-
     void* run_tcp_server();
 
-    void close();
+    void Close();
 
 
     

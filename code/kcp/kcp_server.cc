@@ -38,8 +38,6 @@ KcpHandleClient::~KcpHandleClient() {
     ikcp_release(m_kcp);
 }
 
-
-
 void* KcpHandleClient::run_tcp_server() {
     std::cout << "run_tcp_server" << std::endl;
 	assert(fd && m_kcp);
@@ -57,18 +55,18 @@ void* KcpHandleClient::run_tcp_server() {
     }
 	bool read_file = false;
 	struct sockaddr_in src;
-	socklen_t src_len = sizeof(struct sockaddr_in);
+	// socklen_t src_len = sizeof(struct sockaddr_in);
 	setAddr(c_ip, c_port, &src);
 	uint32_t file_sended = 0;
 	uint32_t file_size = 0;
+	// bool flagSended = false;
+
 	while (!stopFlag.load()) {
 		ikcp_update(m_kcp, KCP::iclock());
-		len = recvfrom(fd, buffer, sizeof(buffer), 0, (sockaddr*)&src, &src_len);
-		// std::cout << "server recv len: " << len << std::endl;
+		len = read(fd, buffer, sizeof(buffer));
+		std::cout << "server recv len: " << len << std::endl;
 		if (len > 0) {
-			
 			int ret = ikcp_input(m_kcp, buffer, len);
-			// std::cout << "server ikcp_input ret: " << ret << std::endl;
 			if (ret < 0) {
 				printf("ikcp_input error: %d\n", ret);
 				continue;
@@ -77,7 +75,10 @@ void* KcpHandleClient::run_tcp_server() {
 			// 发送8 + 128字节确认文件大小，文件名
 			char recv_buffer[2048] = { 0 };
 			ret = ikcp_recv(m_kcp, recv_buffer, len);
+			
+			std::cout << "server ikcp_recv ret: " << ret << std::endl;
 			if(ret > 0) {
+				std::cout << "start recv file" << std::endl;
 				if (!read_file) {
 					assert(ret >= 128 + 8);
 					read_file = true;
@@ -102,21 +103,19 @@ void* KcpHandleClient::run_tcp_server() {
 				file_sended += ret;
 				if (file_sended >= file_size) {
 					printf("File %s received completely\n", file_path.c_str());
-					break;
+					// flagSended = true;
 				}
 				// printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
 
 			} else if (!ret) {
 				break;
-			} else {
-				perror("ikcp_recv");
 			}
 		} else if (!len) {
 			break;
 		} else {
 			perror("recvfrom");
 		}
-		KCP::isleep(10);
+		KCP::isleep(1);
 	}
 
 	// std::cout << "server: close --------------------------" << std::endl;
@@ -168,7 +167,7 @@ void KcpHandleClient::start_kcp_server() {
     // }
 }
 
-void KcpHandleClient::close() {
+void KcpHandleClient::Close() {
 	stopFlag.store(true);
     std::this_thread::sleep_for(std::chrono::seconds(2));
 }

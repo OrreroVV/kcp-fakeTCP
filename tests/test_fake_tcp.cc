@@ -795,7 +795,6 @@ int main(int argc, char *argv[])
 		// }
 		file_path = argv[2];
 		c_port = atoi(argv[3]);
-		printf("%d %s\n", c_port, file_path.c_str());
 	}
 
 	printf("run in %s mode...\n", server ? "server" : "client");
@@ -807,7 +806,8 @@ int main(int argc, char *argv[])
 	// std::cout << "fd: " << fd << std::endl;
 
 
-	std::vector<std::unique_ptr<KCP::KcpHandleClient>> clients;
+	//std::vector<std::unique_ptr<KCP::KcpHandleClient>> clients;
+	std::map<int, std::unique_ptr<KCP::KcpHandleClient>> clients;
 
 	if (sock < 0) {
 		exit(1);
@@ -840,18 +840,35 @@ int main(int argc, char *argv[])
 				perror("epoll_wait");
 				break;
 			}
-
+			std::cout << "nfds: " << nfds << std::endl;
 			for (int i = 0; i < nfds; ++i) {
+				std::cout << "event_data_fd: " << events[i].data.fd << std::endl;
 				if (events[i].data.fd == listen_sock) {
 					struct sockaddr_in peer;
 					socklen_t len = sizeof(peer);
 					int fd = accept(listen_sock, (struct sockaddr *)&peer, &len);
-					if (fd == -1)
-					{
+					if (fd == -1) {
 						perror("accept");
 						continue;
 					}
-					std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) << std::endl;
+					std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
+					"new_fd: " << fd << std::endl;
+
+					ev.events = EPOLLRDHUP;
+					ev.data.fd = fd;
+					if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+						perror("epoll_ctl: conn_sock");
+                        close(fd);
+                        continue;
+					}
+					std::cout << "Epoll create handleClient" << std::endl;
+					std::unique_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, s_port, s_ip, c_port, c_ip));
+					handleClient->start_kcp_server();
+					// clients.push_back(std::move(handleClient));
+					assert(!clients.count(fd));
+					clients[fd] = std::move(handleClient);
+					
+
 					// 设置新连接为非阻塞
 					// if (setNonBlocking(fd) == -1)
 					// {
@@ -859,18 +876,32 @@ int main(int argc, char *argv[])
 					// 	continue;
 					// }
 
-					ev.events = EPOLLIN | EPOLLET;
-					ev.data.fd = fd;
-					if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1)
-					{
-						perror("epoll_ctl: conn_sock");
-						close(fd);
-						continue;
-					}
+					// ev.events = EPOLLIN | EPOLLET;
+					// ev.data.fd = fd;
+					// if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1)
+					// {
+					// 	perror("epoll_ctl: conn_sock");
+					// 	close(fd);
+					// 	continue;
+					// }
 				} else {
-					std::unique_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(events[i].data.fd, s_port, s_ip, c_port, c_ip));
-					handleClient->start_kcp_server();
-					clients.push_back(std::move(handleClient));
+					if (events[i].events & (EPOLLRDHUP)) {
+						std::cout << "client send fin" << std::endl;
+						char buffer[2048] = {};
+						int n = read(events[i].data.fd, buffer, sizeof(buffer));
+						std::cout << "n: " << n << std::endl;
+						if (!n) {
+							std::cout << "closing, close fd" << std::endl;
+							assert(clients.count(events[i].data.fd));
+							clients.erase(clients.find(events[i].data.fd));
+							close(events[i].data.fd);
+							
+						} else {
+							perror("clients");
+						}
+					}
+					// ev.events = EPOLLIN | EPOLLET;
+					// epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, &ev);
 				}
 			}
 		}
@@ -890,8 +921,8 @@ int main(int argc, char *argv[])
 			file_path = "/home/hzh/workspace/work/logs/data.txt";
 		}
 
-		KCP::KcpClient* client = new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip, file_path);
-		client->startClient();
+		std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip, file_path));
+		client->startHand();
 		// // testClient(fd);
 		// def = new tcp_def;
 		// def->fd = sock;

@@ -7,19 +7,26 @@
 
 namespace KCP {
 
-void prase_tcp_packet(const char* buffer,size_t len, tcp_info* info) {
+void prase_tcp_packet(const char* buffer, size_t len, tcp_info* info) {
     iphdr ip_header;
-    memcpy(&ip_header, buffer, sizeof(ip_header));
+    memcpy(&ip_header, buffer, sizeof(iphdr));
 
     tcphdr tcp_header;
-    memcpy(&tcp_header, buffer + sizeof(ip_header), sizeof(tcphdr));
+    memcpy(&tcp_header, buffer + sizeof(iphdr), sizeof(tcphdr));
 
     memset(info, 0, sizeof(tcp_info));
-    info->ack = ntohs(tcp_header.ack);
+    info->ack = tcp_header.ack;
     info->ack_seq = ntohl(tcp_header.ack_seq);
     info->port_src = ntohs(tcp_header.th_sport);
     info->port_dst = ntohs(tcp_header.th_dport);
     info->seq = ntohl(tcp_header.seq);
+	info->fin = tcp_header.fin;
+
+	// std::cout << "ack: " << info->ack << std::endl;
+    // std::cout << "seq: " << info->seq << std::endl;
+    // std::cout << "port_src: " << info->port_src << " port_dst: " << info->port_dst << std::endl;
+	// std::cout << "fin: " << info->fin << " " << tcp_header.fin << std::endl << std::endl << std::endl;
+
 }
 
 void setAddr(const char *ip, short port, struct sockaddr_in* addr) {
@@ -58,6 +65,7 @@ uint16_t calculate_tcp_checksum(const struct iphdr *iphdr_packet, const struct t
 	uint32_t sum = 0;
 
 	pseudo_header pseudo_hdr;
+	memset(&pseudo_hdr, 0, sizeof(pseudo_header));
 	pseudo_hdr.source_address = iphdr_packet->saddr;
 	pseudo_hdr.dest_address = iphdr_packet->daddr;
 	pseudo_hdr.placeholder = 0;
@@ -78,19 +86,22 @@ uint16_t calculate_tcp_checksum(const struct iphdr *iphdr_packet, const struct t
 		sum += ntohs(tcp_packet[i]);
 	}
 
-	char *new_data = new char[data_len + 1];
-	std::memcpy(new_data, data, data_len);
-	if (data_len & 1)
-	{
-		new_data[data_len] = 0;
-		data_len++;
-	}
+	if (data_len) {
+		char *new_data = new char[data_len + 1];
+		std::memcpy(new_data, data, data_len);
+		if (data_len & 1)
+		{
+			new_data[data_len] = 0;
+			data_len++;
+		}
 
-	const uint16_t *data_packet = reinterpret_cast<const uint16_t *>(new_data);
-	int data_length = data_len;
-	for (int i = 0; i < data_length / 2; ++i)
-	{
-		sum += ntohs(data_packet[i]);
+		const uint16_t *data_packet = reinterpret_cast<const uint16_t *>(new_data);
+		int data_length = data_len;
+		for (int i = 0; i < data_length / 2; ++i)
+		{
+			sum += ntohs(data_packet[i]);
+		}
+		delete[] new_data;
 	}
 
 	while (sum >> 16)
@@ -98,7 +109,6 @@ uint16_t calculate_tcp_checksum(const struct iphdr *iphdr_packet, const struct t
 		sum = (sum & 0xffff) + (sum >> 16);
 	}
 
-	delete[] new_data;
 	return static_cast<uint16_t>(~sum);
 }
 

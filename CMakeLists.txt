@@ -2,8 +2,16 @@ cmake_minimum_required(VERSION 3.0)
 
 project(test)
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
-set(CMAKE_CXX_FLAGS "-fsanitize=address -fno-omit-frame-pointer $ENV{CXXFLAGS}  -lcrypto   -rdynamic -O3 -fPIC -ggdb -std=c++11 -Wall -Wno-deprecated -Werror -Wno-unused-function -Wno-builtin-macro-redefined -Wno-deprecated-declarations  -Werror=unused-variable  -Werror=unused-variable -Werror=sign-compare")
+# 设置 C++ 标准
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+# 编译选项
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer $ENV{CXXFLAGS} -lcrypto -rdynamic -O3 -fPIC -ggdb -Wall -Wno-deprecated -Werror -Wno-unused-function -Wno-builtin-macro-redefined -Wno-deprecated-declarations -Werror=unused-variable -Werror=sign-compare")
+
+
+# set(CMAKE_VERBOSE_MAKEFILE ON)
+# set(CMAKE_CXX_FLAGS "-fsanitize=address -fno-omit-frame-pointer $ENV{CXXFLAGS}  -lcrypto   -rdynamic -O3 -fPIC -ggdb -std=c++11 -Wall -Wno-deprecated -Werror -Wno-unused-function -Wno-builtin-macro-redefined -Wno-deprecated-declarations  -Werror=unused-variable  -Werror=unused-variable -Werror=sign-compare")
 
 include_directories(.)
 include_directories(./code)
@@ -34,6 +42,9 @@ set(LIB_LIB
 #     tests/test_kcp.cpp
 # )
 
+add_executable(a tests/a.cpp)
+add_dependencies(a hzh)
+target_link_libraries(a ${LIB_LIB})# 设置编译选项
 
 add_executable(fake_tcp tests/test_fake_tcp.cc)
 add_dependencies(fake_tcp hzh)
@@ -55,9 +66,6 @@ target_link_libraries(test_b ${LIB_LIB})# 设置编译选项
 
 
 
-# add_executable(a tests/a.cpp)
-# add_dependencies(a hzh)
-# target_link_libraries(a ${LIB_LIB})# 设置编译选项
 
 # add_executable(b tests/b.cpp)
 # add_dependencies(b hzh)
