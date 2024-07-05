@@ -51,8 +51,8 @@ int setNonBlocking(int fd) {
 
 int main(int argc, char *argv[])
 {
-	static char *s_ip = "127.0.0.1";
-	static char *c_ip = "127.0.0.1";
+	static const char *s_ip = "127.0.0.1";
+	static const char *c_ip = "127.0.0.1";
 	static short s_port = 6666;
 	static short c_port = 6668;
 
@@ -120,10 +120,7 @@ int main(int argc, char *argv[])
 					}
 					std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
 					"new_fd: " << fd << std::endl;
-					c_ip = inet_ntoa(peer.sin_addr);
-					c_port = ntohs(peer.sin_port);
 
-					
 					ev.events = EPOLLRDHUP;
 					ev.data.fd = fd;
 					if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
