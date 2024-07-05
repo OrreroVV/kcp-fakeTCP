@@ -21,13 +21,9 @@ include_directories(${PCAP_INCLUDE_DIRS})
 set(LIB_SRC
     # code/model.cc
     code/kcp/ikcp.cc
-    # code/kcp/kcp_client.cc
     code/kcp/kcp_socket.cc
-    code/kcp/fake_tcp.cc
     code/kcp/kcp_server.cc
     code/kcp/kcp_client.cc
-    # code/kcp_inc.cc
-    # code/kcp_client.cc
     )
 
 add_library(hzh SHARED ${LIB_SRC})
