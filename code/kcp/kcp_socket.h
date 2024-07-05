@@ -85,6 +85,8 @@ typedef struct __TCP_INFO__ {
 	struct in_addr ip_dst;
 } tcp_info;
 
+int StartFakeTcp(const char *ip, short port);
+int StartServer(const char *ip, short port);
 
 void prase_tcp_packet(const char* buffer,size_t len, tcp_info* info);
 

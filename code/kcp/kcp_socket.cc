@@ -112,71 +112,91 @@ uint16_t calculate_tcp_checksum(const struct iphdr *iphdr_packet, const struct t
 	return static_cast<uint16_t>(~sum);
 }
 
+int StartFakeTcp(const char *ip, short port) {
+	// 打开原始套接字
+	int sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
+	if (sock < 0) {
+		perror("socket");
+		return -1;
+	}
+
+	int on = 1;
+	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
+		perror("setsockopt");
+		return -1;
+	}
+
+	// 设置 "don't fragment" 标志
+    on = IP_PMTUDISC_DO;  // IP_PMTUDISC_DO: 禁止分段
+    if (setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER, &on, sizeof(on)) < 0) {
+        perror("setsockopt failed");
+        close(sock);
+        return -1;
+    }
 
 
+	struct sockaddr_in local;
+	setAddr(ip, port, &local);
+
+	if (bind(sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
+		perror("bind");
+		return -1;
+	}
+
+	return sock;
+}
+
+int StartServer(const char *ip, short port) {
+	int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (listen_sock < 0) {
+		perror("socket");
+		return -1;
+	}
+
+	//     // 设置 socket 为非阻塞模式
+    // int flags = fcntl(listen_sock, F_GETFL, 0);
+    // if (flags == -1) {
+    //     std::cerr << "Failed to get socket flags" << std::endl;
+    //     return -1;
+    // }
+
+    // if (fcntl(listen_sock, F_SETFL, flags | O_NONBLOCK) == -1) {
+    //     std::cerr << "Failed to set non-blocking mode" << std::endl;
+    //     return -1;
+    // }
 
 
-// int32_t udp_Create(UDP_Def *udp, uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) {
-//     if (udp == NULL) {
-//         return -1;
-//     }
+	int optval = 1;
+	setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 
-//     udp->fd = -1;
+	struct sockaddr_in local;
+	local.sin_family = AF_INET;
+	local.sin_port = htons(port);
+	local.sin_addr.s_addr = inet_addr(ip);
+	
 
-//     udp->fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-//     fcntl(udp->fd, F_SETFL, O_NONBLOCK);//设置非阻塞
-//     std::cout << "fd: " << udp->fd << std::endl;
-//     if (udp->fd < 0) {
-//         return -1;
-//     }
+	if (bind(listen_sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
+		perror("bind");
+		return -1;
+	}
 
-//     udp->remote_addr.sin_family = AF_INET;
-//     udp->remote_addr.sin_port = htons(remotePort);
-//     udp->remote_addr.sin_addr.s_addr = remoteIP;
+	if (listen(listen_sock, 5) < 0) {
+		perror("listen");
+	}
 
-//     udp->local_addr.sin_family = AF_INET;
-//     udp->local_addr.sin_port = htons(localPort);
-//     udp->local_addr.sin_addr.s_addr = INADDR_ANY;
+	// //sleep(4);
+	// struct sockaddr_in peer;
+	// socklen_t len = sizeof(peer);	
+	// int fd = accept(listen_sock, (struct sockaddr *)&peer, &len);
+	// if (fd < 0) {
+	// 	perror("accept");
+	// }
 
-    
-//     int opt = 1;
-//     setsockopt(udp->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));//chw
-//     fcntl(udp->fd, F_SETFL, O_NONBLOCK);//设置非阻塞
+	// printf("new connect: %s:%d\n", inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
+	// close(listen_sock);
+	return listen_sock;
+}
 
-
-//     if (bind(udp->fd, (struct sockaddr *)&udp->local_addr, sizeof(struct sockaddr_in)) < 0) {
-//         close(udp->fd);
-//         printf("[CreateUdpServer] Udp server bind failed,errno=[%d],plocalPort=[%d]",errno,localPort);
-       
-//         return -2;
-//     }
-
-//     return 0;
-// }
-
-// int udp_sendData_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
-//     UDP_Def* udp_def =  (UDP_Def*)user;
-
-//     int sended = 0;
-//     while (sended < len) {
-//         size_t s = (len - sended);
-//         if(s > UDP_MTU) s = UDP_MTU;
-//         ssize_t ret = ::sendto(udp_def->fd, buffer + sended, s, MSG_DONTWAIT, (struct sockaddr*) &udp_def->remote_addr, sizeof(struct sockaddr));
-//         if(ret < 0){
-//             return -1;
-//         }
-//         sended += s;
-//         // size_t siz = std::min(UDP_MTU, len - sended);
-//         // ssize_t ret = ::sendto(udp_def->fd, buffer + sended, siz, MSG_DONTWAIT, (struct sockaddr*)&udp_def->remote_addr, sizeof(struct sockaddr));
-        
-//         // if (ret < 0) {
-//         //     return -1;
-//         // }
-//         // sended += siz;
-//     }
-
-//     return (size_t)sended;
-// }
 
 
 };

@@ -78,11 +78,6 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user)
 			break;
 		}
 		client->CLIENT_SUM_SEND.fetch_add(data_len);
-
-		// ssize_t ret = send(def->fd, buffer + sended, s, 0);
-		// if(ret < 0){
-		//     return -1;
-		// }
 		sended += s;
 	}
 
@@ -107,79 +102,6 @@ KcpClient::~KcpClient() {
 	Close();
 }
 
-
-void KcpClient::start_hand_shake() {
-	char buf[65536] = {0};
-	struct sockaddr_in server_addr;
-	setAddr(s_ip, s_port, &server_addr);
-
-	struct in_addr client_in_addr, server_in_addr;
-	inet_aton(c_ip, &client_in_addr);
-	inet_aton(c_ip, &server_in_addr);
-
-	uint8_t syn = 0, ack = 0;
-	int ack_seq = 0;
-	struct pkt_info info;
-
-	while (true) {
-		char *data = ReserveHdrSize(buf);
-		ssize_t _s = 0;
-
-		printf("s_state: %d  ----------------------\n", s_state);
-
-		if (s_state == TCP_CLOSED) {
-			// seq = 12345;
-			syn = 1;
-			s_state = TCP_SYN_SEND;
-		} else if (s_state == TCP_SYN_SEND) {
-			if (info.ack_seq != seq + 1) {
-				printf("invalid ack_seq: %d\n", info.ack_seq);
-				break;
-			}
-
-			seq++;
-			// seq.fetch_add(1);
-			syn = 0;
-			ack_seq = info.seq + 1;
-			ack = 1;
-			s_state = TCP_ESTABLISHED;
-		} else {
-			ack_seq = info.seq + info.data_len;
-			// seq.fetch_add(_s);
-			seq += _s;
-		}
-
-		int total = BuildPkt(data, _s, &client_in_addr, c_port, &server_in_addr, s_port, seq, ack_seq, syn, ack);
-
-		_s = sendto(fd, buf, total, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
-		if (_s < 0) {
-			perror("sendto");
-			break;
-		}
-
-		if (s_state == TCP_ESTABLISHED) {
-			server_ack_seq.store(info.seq + 1);
-			send_file();
-			return;
-			// ikcp_send(m_kcp, msg.c_str(), msg.size());
-		}
-
-		memset(buf, 0, sizeof(buf));
-		struct sockaddr_in from_addr;
-		setAddr(s_ip, s_port, &from_addr);
-		socklen_t from_size;
-		from_size = sizeof(struct sockaddr_in);
-
-		if (s_state != TCP_ESTABLISHED)
-		{
-			ssize_t sz = recv_from_addr(fd, buf, sizeof(buf), 0, &from_addr, &from_size, &info);
-			if (sz <= 0)
-			{
-				break;
-			}
-		}
-	}
-}
 
 void KcpClient::build_ip_tcp_header(char* data, const char* buffer, size_t data_len, int ack, int psh, int syn, int fin) {
 	
@@ -242,12 +164,10 @@ void KcpClient::run_tcp_client() {
 			if (info.port_dst != c_port) {
 				continue;
 			}
-			// std::cout << info.port_src << " " << info.port_dst << " " <<  info.seq << " " << info.ack_seq << std::endl;
 			server_ack_seq.store(info.seq + len - (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr)));
 			// std::cout << "client recv len: " << len << std::endl;
 			// ikcp_send(m_kcp, "", 0);
 			
-
 
 			if (len > (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr)))
 			{
@@ -390,7 +310,7 @@ void KcpClient::send_file() {
 	Close();
 }
 
-void KcpClient::startHand() {
+void KcpClient::start_hand_shake() {
 	assert(s_state == TCP_CLOSED);
 	char data[41] = {};
 

@@ -40,7 +40,6 @@ public:
     ~KcpClient();
     
     void start_hand_shake();
-    void startHand();
     void build_ip_tcp_header(char* data, const char* buffer, size_t data_len, int ack, int psh, int syn, int fin);
     void run_tcp_client();
     void *client_loop();

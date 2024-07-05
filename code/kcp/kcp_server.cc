@@ -118,7 +118,6 @@ void* KcpHandleClient::run_tcp_server() {
 		KCP::isleep(1);
 	}
 
-	// std::cout << "server: close --------------------------" << std::endl;
 
 	file.close();
 	return nullptr;
@@ -160,11 +159,6 @@ void KcpHandleClient::start_kcp_server() {
 	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
 	tcp_server_thread->detach(); 
 
-    // pthread_t tid;
-	// if (pthread_create(&tid, NULL, start_tcp_server_thread, this) != 0) {
-    //     perror("pthread_create failed");
-    //     return;
-    // }
 }
 
 void KcpHandleClient::Close() {
