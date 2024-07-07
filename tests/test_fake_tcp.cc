@@ -49,14 +49,20 @@ int setNonBlocking(int fd) {
     return 0;
 }
 
+static const char *s_ip = "127.0.0.1";
+static const char *c_ip = "127.0.0.1";
+std::string file_path;
+static short s_port = 6666;
+
+void test(int sock, int c_port) {
+	std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip, file_path));
+	client->start_hand_shake();
+}
+
 int main(int argc, char *argv[])
 {
-	static const char *s_ip = "127.0.0.1";
-	static const char *c_ip = "127.0.0.1";
-	static short s_port = 6666;
 	static short c_port = 6668;
 
-	std::string file_path;
 	int server = 0;
 	if (argc >= 2 && strncmp(argv[1], "-s", 2) == 0)
 	{
@@ -75,6 +81,7 @@ int main(int argc, char *argv[])
 	int sock = server ? KCP::StartServer(s_ip, s_port) : KCP::StartFakeTcp(c_ip, c_port);
 
 	std::map<int, std::unique_ptr<KCP::KcpHandleClient>> clients;
+	std::vector<std::unique_ptr<std::thread>>threads;
 
 	if (sock < 0) {
 		exit(1);
@@ -162,8 +169,13 @@ int main(int argc, char *argv[])
 		if (file_path.empty()) {
 			file_path = "/home/hzh/workspace/work/logs/data.txt";
 		}
-		std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip, file_path));
-		client->start_hand_shake();
+		
+		for (int i = 0; i < 10000; i++) {
+			c_port = 10000 + i;
+			std::unique_ptr<std::thread> t(new std::thread(&test, sock, c_port));
+			t->detach();
+			threads.push_back(std::move(t));
+		}
 	}
 
 	close(sock);

@@ -71,6 +71,11 @@ void* KcpHandleClient::run_tcp_server() {
 				printf("ikcp_input error: %d\n", ret);
 				continue;
 			}
+			std::string send_buffer = "hello world";
+			ret = send(fd, send_buffer.c_str(), send_buffer.size(), 0);
+			if (ret == -1) {
+				perror("send");
+			}
 
 			// 发送8 + 128字节确认文件大小，文件名
 			char recv_buffer[2048] = { 0 };
