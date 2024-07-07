@@ -88,6 +88,7 @@ KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip,
  	:fd(fd), c_port(c_port), s_port(s_port), c_ip(c_ip), s_ip(s_ip), file_path(file_path){
 	s_state = TCP_CLOSED;
 
+	ip_id = 1231;
 	server_ack_seq.store(0);
 	CLIENT_SUM_SEND.store(0);
 	std::srand(static_cast<unsigned>(std::time(0)));
@@ -110,7 +111,7 @@ void KcpClient::build_ip_tcp_header(char* data, const char* buffer, size_t data_
 	ip_header.ihl = 5;
 	ip_header.version = IPVERSION;
 	ip_header.tos = 0;
-	ip_header.tot_len = sizeof(struct iphdr) + sizeof(struct tcphdr);
+	ip_header.tot_len = sizeof(struct iphdr) + sizeof(struct tcphdr) + data_len;
 	ip_header.id = htons(++ip_id);
 	ip_header.frag_off = 0;
 	ip_header.ttl = 255;
@@ -140,10 +141,13 @@ void KcpClient::build_ip_tcp_header(char* data, const char* buffer, size_t data_
 	ip_header.check = calculate_ip_checksum(&ip_header);
 	tcp_header.check = htons(calculate_tcp_checksum(&ip_header, &tcp_header, buffer, data_len));
 
-	CLIENT_SUM_SEND.fetch_add(data_len);
+	
 	memcpy(data, &ip_header, IPV4_HEADER_SIZE);
 	memcpy(data + IPV4_HEADER_SIZE, &tcp_header, TCP_HEADER_SIZE);
 	memcpy(data + IP_TCP_HEADER_SIZE, buffer, data_len);
+
+	
+	CLIENT_SUM_SEND.fetch_add(data_len);
 }
 
 void KcpClient::run_tcp_client() {
@@ -311,8 +315,9 @@ void KcpClient::send_file() {
 }
 
 void KcpClient::start_hand_shake() {
+	std::cout << "start hand shake" << std::endl;
 	assert(s_state == TCP_CLOSED);
-	char data[41] = {};
+	char data[1024] = {};
 
 	build_ip_tcp_header(data, "", 0, 0, 0, 1, 0);
 	s_state = TCP_SYN_SEND;
@@ -320,7 +325,7 @@ void KcpClient::start_hand_shake() {
 	setAddr(s_ip, s_port, &dest);
 	int ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
 	if (ret < 0) {
-        exit(1);
+        perror("sendto error");
     }
 
 	struct sockaddr_in recv_dest;

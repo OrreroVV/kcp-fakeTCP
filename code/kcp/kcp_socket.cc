@@ -120,28 +120,30 @@ int StartFakeTcp(const char *ip, short port) {
 		return -1;
 	}
 
-	int on = 1;
-	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
-		perror("setsockopt");
-		return -1;
-	}
-
-	// 设置 "don't fragment" 标志
-    on = IP_PMTUDISC_DO;  // IP_PMTUDISC_DO: 禁止分段
-    if (setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER, &on, sizeof(on)) < 0) {
-        perror("setsockopt failed");
-        close(sock);
-        return -1;
+    // 设置IP_HDRINCL选项，表示自己构造IP头部
+    int one = 1;
+    const int *val = &one;
+    if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0) {
+        perror("setsockopt error");
+        return 1;
     }
 
+	// // 设置 "don't fragment" 标志
+    // on = IP_PMTUDISC_DO;  // IP_PMTUDISC_DO: 禁止分段
+    // if (setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER, &on, sizeof(on)) < 0) {
+    //     perror("setsockopt failed");
+    //     close(sock);
+    //     return -1;
+    // }
 
-	struct sockaddr_in local;
-	setAddr(ip, port, &local);
 
-	if (bind(sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
-		perror("bind");
-		return -1;
-	}
+	// struct sockaddr_in local;
+	// setAddr("127.0.0.1", port, &local);
+
+	// if (bind(sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
+	// 	perror("bind");
+	// 	return -1;
+	// }
 
 	return sock;
 }

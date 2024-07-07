@@ -38,6 +38,10 @@ set(LIB_LIB
 #     tests/test_kcp.cpp
 # )
 
+add_executable(test tests/test_kcp_client.cc)
+add_dependencies(test hzh)
+target_link_libraries(test ${LIB_LIB})# 设置编译选项
+
 add_executable(client tests/test_client.cpp)
 add_dependencies(client hzh)
 target_link_libraries(client ${LIB_LIB})# 设置编译选项

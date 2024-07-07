@@ -9,8 +9,8 @@
 #include "kcp_socket.h"
 
 #define UDP_MTU 1400
-#define IPV4_HEADER_SIZE 20
-#define TCP_HEADER_SIZE 20
+#define IPV4_HEADER_SIZE (sizeof(struct iphdr))
+#define TCP_HEADER_SIZE (sizeof(struct tcphdr))
 
 // 计算 IP + TCP 头部的总大小
 #define IP_TCP_HEADER_SIZE (IPV4_HEADER_SIZE + TCP_HEADER_SIZE)
