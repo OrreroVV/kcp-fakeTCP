@@ -19,6 +19,14 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
+
+    int opt = 1;
+      // 设置地址重用选项
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+        perror("setsockopt");
+        exit(EXIT_FAILURE);
+    }
+
     // 绑定到端口 6666
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
