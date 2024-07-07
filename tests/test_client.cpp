@@ -42,7 +42,7 @@ int main() {
     // 读取服务器的响应
     int valread = read(sock, buffer, BUFFER_SIZE);
     std::cout << "Received from server: " << buffer << std::endl;
-
+    std::cout << "valread: " << valread << std::endl;
     // 关闭连接
     close(sock);
     return 0;

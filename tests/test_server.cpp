@@ -10,7 +10,6 @@
 int main() {
     int server_fd, new_socket;
     struct sockaddr_in address;
-    int opt = 1;
     int addrlen = sizeof(address);
     char buffer[BUFFER_SIZE] = {0};
 
@@ -50,7 +49,7 @@ int main() {
     // 读取客户端发送的数据
     int valread = read(new_socket, buffer, BUFFER_SIZE);
     std::cout << "Received from client: " << buffer << std::endl;
-
+    std::cout << "valread: " << valread << std::endl;
     // 发送响应到客户端
     const char *response = "Hello from server";
     send(new_socket, response, strlen(response), 0);
