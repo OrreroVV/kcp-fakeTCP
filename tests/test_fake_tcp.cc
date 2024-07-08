@@ -50,7 +50,7 @@ int setNonBlocking(int fd) {
 }
 
 static const char *s_ip = "8.138.86.207";
-static const char *c_ip = "192.168.61.243";
+static const char *c_ip = "180.154.82.177";
 std::string file_path;
 static short s_port = 6666;
 
