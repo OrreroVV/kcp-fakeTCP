@@ -181,7 +181,7 @@ int StartServer(const char *ip, short port) {
 		return -1;
 	}
 
-	if (listen(listen_sock, 5) < 0) {
+	if (listen(listen_sock, 1024) < 0) {
 		perror("listen");
 	}
 
