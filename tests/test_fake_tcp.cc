@@ -51,7 +51,7 @@ int setNonBlocking(int fd) {
 
 int main(int argc, char *argv[])
 {
-	static const char *s_ip = "127.0.0.1";
+	static const char *s_ip = "8.138.86.207";
 	static const char *c_ip = "127.0.0.1";
 	static short s_port = 6666;
 	static short c_port = 6668;
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 
 	printf("run in %s mode...\n", server ? "server" : "client");
 	int sock = server ? KCP::StartServer(s_ip, s_port) : KCP::StartFakeTcp(c_ip, c_port);
-
+	std::cout << sock << std::endl;
 	std::map<int, std::unique_ptr<KCP::KcpHandleClient>> clients;
 
 	if (sock < 0) {

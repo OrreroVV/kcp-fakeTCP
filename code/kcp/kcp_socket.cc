@@ -119,7 +119,6 @@ int StartFakeTcp(const char *ip, short port) {
 		perror("socket");
 		return -1;
 	}
-
 	int on = 1;
 	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
 		perror("setsockopt");
@@ -171,8 +170,9 @@ int StartServer(const char *ip, short port) {
 
 	struct sockaddr_in local;
 	local.sin_family = AF_INET;
+	local.sin_addr.s_addr = INADDR_ANY;
 	local.sin_port = htons(port);
-	local.sin_addr.s_addr = inet_addr(ip);
+	// local.sin_addr.s_addr = inet_addr(ip);
 	
 
 	if (bind(listen_sock, (struct sockaddr *)&local, sizeof(local)) < 0) {

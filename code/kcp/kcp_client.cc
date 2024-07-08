@@ -317,8 +317,10 @@ void KcpClient::start_hand_shake() {
 	build_ip_tcp_header(data, "", 0, 0, 0, 1, 0);
 	s_state = TCP_SYN_SEND;
 	struct sockaddr_in dest;
+	std::cout << s_ip << " " << s_port << std::endl;
 	setAddr(s_ip, s_port, &dest);
 	int ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
+	std::cout << "ret: " << ret << std::endl;
 	if (ret < 0) {
         exit(1);
     }
