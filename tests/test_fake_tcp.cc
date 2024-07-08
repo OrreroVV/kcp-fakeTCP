@@ -53,6 +53,7 @@ static const char *s_ip = "8.138.86.207";
 static const char *c_ip = "192.168.61.243";
 std::string file_path;
 static short s_port = 6666;
+static short c_port = 12345;
 
 // void test(int sock, int c_port) {
 // 	std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, c_port, s_port, c_ip, s_ip, file_path));
@@ -61,7 +62,6 @@ static short s_port = 6666;
 
 int main(int argc, char *argv[])
 {
-	static short c_port = 12345;
 
 	int server = 0;
 	if (argc >= 2 && strncmp(argv[1], "-s", 2) == 0)
@@ -127,6 +127,7 @@ int main(int argc, char *argv[])
 					
 					std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
 					"new_fd: " << fd << std::endl;
+					c_port = ntohs(peer.sin_port);
 
 					// 设置新连接为非阻塞
 					if (setNonBlocking(fd) == -1)

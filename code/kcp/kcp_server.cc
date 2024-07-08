@@ -42,6 +42,7 @@ KcpHandleClient::KcpHandleClient(int fd, int s_port, const char* s_ip, int c_por
 
 
 KcpHandleClient::~KcpHandleClient() {
+	std::cout << "~" << fd << std::endl;
 	Close();
 }
 
@@ -227,7 +228,7 @@ void KcpHandleClient::Close() {
 		return;
 	}
 	stopFlag.store(true);
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+	KCP::isleep(10);
     ikcp_release(m_kcp);
 	m_kcp = nullptr;
 	close(fd);

@@ -51,7 +51,6 @@ int setNonBlocking(int fd) {
 
 static const char *s_ip = "8.138.86.207";
 static const char *c_ip = "192.168.61.243";
-std::string file_path;
 static short s_port = 6666;
 
 // void test(int sock, int c_port) {
@@ -69,6 +68,7 @@ int main(int argc, char *argv[])
 		server = 1;
 	}
 	
+	std::string file_path;
 	if (argc >= 4) {
 		// if (argc >= 4 && strncmp(argv[2], "-p", 2) == 0) {
 		// 	c_port = atoi(argv[3]);
@@ -127,8 +127,9 @@ int main(int argc, char *argv[])
 					}
 					
 					std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
-					"new_fd: " << fd << std::endl;
-
+					" new_fd: " << fd << std::endl;
+					
+					c_port = ntohs(peer.sin_port);
 					// 设置新连接为非阻塞
 					if (setNonBlocking(fd) == -1)
 					{
@@ -193,6 +194,7 @@ int main(int argc, char *argv[])
 								// file_name = random_24();
 								// filePath = prefix_path + file_name;
 								client->file.open(filePath, std::ios::out | std::ios::binary);
+								
 								if (len > 8 + 128) {
 									client->file.write(buffer + 8 + 128, ret - (8 + 128));
 									client->file_sended += ret - (8 + 128);
@@ -210,8 +212,9 @@ int main(int argc, char *argv[])
 
 							}
 						} else if (!ret) {
+							std::cout << "closing, close fd" << fd << std::endl;
 							client->Close();
-							clients.erase(clients.find(events[i].data.fd));
+							clients.erase(clients.find(fd));
 							close(fd);
 						} else {
 						}
