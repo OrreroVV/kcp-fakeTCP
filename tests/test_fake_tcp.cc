@@ -114,7 +114,6 @@ int main(int argc, char *argv[])
 				perror("epoll_wait");
 				break;
 			}
-			std::cout << "nfds: " << nfds << std::endl;
 			for (int i = 0; i < nfds; ++i) {
 				// std::cout << "event_data_fd: " << events[i].data.fd << std::endl;
 				if (events[i].data.fd == listen_sock) {
@@ -156,45 +155,48 @@ int main(int argc, char *argv[])
 
 					if (state & (EPOLLIN)) {
 						char recv_buffer[2048] = {};
-						int ret = read(fd, recv_buffer, strlen(recv_buffer));
+						int ret = read(fd, recv_buffer, 2048);
+						std::cout << "read: " << ret << std::endl;
+						std::string filePath;
 						if (ret > 0) {
 							
-							int kcp_ret = ikcp_input(client->m_kcp, recv_buffer, strlen(recv_buffer));
+							int kcp_ret = ikcp_input(client->m_kcp, recv_buffer, ret);
 							if (kcp_ret < 0) {
 								printf("ikcp_input error: %d\n", ret);
 								continue;
 							}
 							char buffer[2048] {};
-							int len = ikcp_recv(client->m_kcp, buffer, strlen(buffer));
+							int len = ikcp_recv(client->m_kcp, buffer, ret);
+							std::cout << "recv len: " << len << std::endl;
 							if (len > 0) {
 								// data
 							if (!client->read_file) {
 								assert(ret >= 128 + 8);
 								client->read_file = true;
 
-								memcpy(&client->file_size, recv_buffer, sizeof(uint32_t));
+								memcpy(&client->file_size, buffer, sizeof(uint32_t));
 								client->file_size = ntohl(client->file_size);
 								printf("File size: %u\n", client->file_size);
 
-								char file_name[128] {};
-								memcpy(file_name, recv_buffer + sizeof(uint32_t), sizeof(file_name));
+								char file_name[128] = { 0 };
+								memcpy(file_name, buffer + sizeof(uint32_t), 128);
 								printf("File name: %s\n", file_name);
 								
-								file_path = client->prefix_path + client->random_24() + ".txt";
+								filePath = client->prefix_path + client->random_24() + ".txt";
 								// file_name = random_24();
-								// file_path = prefix_path + file_name;
-								client->file.open(file_path, std::ios::out | std::ios::binary);
-
+								// filePath = prefix_path + file_name;
+								client->file.open(filePath, std::ios::out | std::ios::binary);
 								if (len > 8 + 128) {
-									client->file.write(recv_buffer + 8 + 128, ret - (8 + 128));
+									client->file.write(buffer + 8 + 128, ret - (8 + 128));
 									client->file_sended += ret - (8 + 128);
 								}
 								continue;
 							}
-							client->file.write(recv_buffer, ret);
+							client->file.write(buffer, ret);
 							client->file_sended += ret;
+							std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
 							if (client->file_sended >= client->file_size) {
-								printf("File %s received completely\n", file_path.c_str());
+								printf("File %s received completely\n", filePath.c_str());
 								client->file.close();
 								// flagSended = true;
 							}

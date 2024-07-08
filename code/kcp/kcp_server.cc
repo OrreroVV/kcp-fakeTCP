@@ -88,6 +88,9 @@ void* KcpHandleClient::run_tcp_server() {
 			std::cout << "looping" << std::endl;
 		}
 		ikcp_update(m_kcp, KCP::iclock());
+		KCP::isleep(1);
+		continue;
+		
 		len = read(fd, buffer, sizeof(buffer));
 		if (len > 0) {
 			
@@ -192,8 +195,8 @@ void KcpHandleClient::start_kcp_server() {
 
 
     stopFlag.store(false);
-	// tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
-	// tcp_server_thread->detach(); 
+	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
+	tcp_server_thread->detach(); 
 }
 
 std::string KcpHandleClient::random_24() {
