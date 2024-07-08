@@ -94,7 +94,7 @@ KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip,
 	std::srand(static_cast<unsigned>(std::time(0)));
 	// seq.store(rand());
 	seq = rand();
-
+	std::cout << "c_port: " << c_port << std::endl;
 	m_kcp = ikcp_create(c_port, this);
 	assert(m_kcp);
 }

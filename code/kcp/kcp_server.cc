@@ -28,7 +28,8 @@ int tcp_server_send_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 KcpHandleClient::KcpHandleClient(int fd, int s_port, const char* s_ip, int c_port, const char* c_ip)
     :fd(fd), s_port(s_port), s_ip(s_ip), 
     c_port(c_port), c_ip(c_ip) {
-
+	
+	std::cout << "c_port: " << c_port << std::endl;
     m_kcp = ikcp_create(c_port, (void*)this);
 
     read_file = false;
