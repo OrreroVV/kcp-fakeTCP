@@ -269,6 +269,7 @@ void KcpClient::kcp_client_start()
 }
 
 void KcpClient::send_file() {
+	std::cout << "start send file" << std::endl;
 	assert(s_state == TCP_ESTABLISHED);
 	kcp_client_start();
 
@@ -277,7 +278,9 @@ void KcpClient::send_file() {
 
 	std::ifstream file(file_path, std::ios::in | std::ios::binary);
 	if (!file) {
-		exit(1);
+		perror("send file");
+		Close();
+		return;
 	}
 
 	char temp[8 + 128]{};
@@ -306,11 +309,7 @@ void KcpClient::send_file() {
 	
 	file.close();
 	std::cout << "send file finished" << std::endl;
-	while (ikcp_waitsnd(m_kcp) > 0) {
-		KCP::isleep(100);
-		std::cout << "waitsnd: " << ikcp_waitsnd(m_kcp) << std::endl;
-	}
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+
 	Close();
 }
 
@@ -347,6 +346,8 @@ void KcpClient::start_hand_shake() {
 	}
 	if (info.ack_seq != seq + 1) {
 		printf("invalid ack_seq: %d\n", info.ack_seq);
+		Close();
+		return;
 	}
 	seq++;
 	server_ack_seq.store(info.seq + 1);
@@ -425,12 +426,20 @@ void KcpClient::start_waving() {
 }
 
 void KcpClient::Close() {
+	if (!m_kcp) {
+		return;
+	}
+	while (ikcp_waitsnd(m_kcp) > 0) {
+		KCP::isleep(100);
+		std::cout << "waitsnd: " << ikcp_waitsnd(m_kcp) << std::endl;
+	}
 	if (stopFlag.load()) {
 		return;
 	}
 	stopFlag.store(true);
-	std::this_thread::sleep_for(std::chrono::seconds(2));
+	std::this_thread::sleep_for(std::chrono::seconds(1));
 	ikcp_release(m_kcp);
+	m_kcp = nullptr;
 	start_waving();
 }
 

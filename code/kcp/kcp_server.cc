@@ -38,6 +38,21 @@ KcpHandleClient::~KcpHandleClient() {
     ikcp_release(m_kcp);
 }
 
+// 生成24位随机字符串的函数
+std::string random_24() {
+    const std::string characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    std::string random_string;
+    random_string.reserve(24);
+
+    // 初始化随机数生成器
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+    for (size_t i = 0; i < 24; ++i) {
+        random_string += characters[std::rand() % characters.size()];
+    }
+	return random_string;
+}
+
 void* KcpHandleClient::run_tcp_server() {
     std::cout << "run_tcp_server" << std::endl;
 	assert(fd && m_kcp);
@@ -95,7 +110,10 @@ void* KcpHandleClient::run_tcp_server() {
 					char file_name[128] {};
 					memcpy(file_name, recv_buffer + sizeof(uint32_t), sizeof(file_name));
 					printf("File name: %s\n", file_name);
-    				file_path = prefix_path + file_name;
+					
+    				file_path = prefix_path + random_24() + ".txt";
+					// file_name = random_24();
+    				// file_path = prefix_path + file_name;
 					file.open(file_path, std::ios::out | std::ios::binary);
 
 					if (len > 8 + 128) {
