@@ -67,6 +67,7 @@ void connectToServer(const std::string& server_ip, int server_port, int client_p
 	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
 		perror("setsockopt");
 	}
+
 	std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, client_port, s_port, c_ip, s_ip, file_path));
 	client->start_hand_shake();
     clients[sock] = std::move(client);
@@ -76,7 +77,7 @@ void testConcurrency(const std::string& server_ip, int server_port, int num_conn
     // num_connections = 1;
     std::vector<std::thread> threads;
     for (int i = 0; i < num_connections; ++i) {
-        threads.emplace_back(connectToServer, server_ip, server_port, rand() % 65535);
+        threads.emplace_back(connectToServer, server_ip, server_port, 10000 + i);
     }
 
     for (auto& t : threads) {

@@ -227,7 +227,7 @@ void* KcpClient::client_loop()
 			std::cout << "looping" << std::endl;
 		}
 		ikcp_update(m_kcp, KCP::iclock());
-		KCP::isleep(1);
+		KCP::isleep(10);
 	}
 
 	return nullptr;
@@ -381,7 +381,7 @@ void KcpClient::start_waving() {
 	// server ack
 	tcp_info info;
 	if (s_state == TCP_FIN_WAIT1) {
-		std::cout <<"TCP_FIN_WAIT1" << std::endl;
+		std::cout << fd << "TCP_FIN_WAIT1" << std::endl;
 		while (true) {
 			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
 			if (ret < 0) {
@@ -399,7 +399,7 @@ void KcpClient::start_waving() {
 	if (s_state == TCP_FIN_WAIT2) {
 		//server fin
 		
-		std::cout <<"TCP_FIN_WAIT2" << std::endl;
+		std::cout << fd << " TCP_FIN_WAIT2" << std::endl;
 		while (true) {
 			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
 			if (ret < 0) {
@@ -418,9 +418,10 @@ void KcpClient::start_waving() {
 
 	if (s_state == TCP_CLOSE_WAIT) {
 		//client ack
-		std::cout << "TCP_CLOSE_WAIT" << std::endl;
 		build_ip_tcp_header(data, "", 0, 1, 0, 0, 0);
 		ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
+		
+		std::cout << "TCP_CLOSE_WAIT: " << ret << std::endl;
 		if (ret < 0) {
 			exit(1);
 		}
@@ -433,14 +434,16 @@ void KcpClient::Close() {
 		return;
 	}
 	while (ikcp_waitsnd(m_kcp) > 0) {
-		KCP::isleep(1000);
+		KCP::isleep(100);
 		std::cout << "fd: " << fd <<" waitsnd: " << ikcp_waitsnd(m_kcp) << std::endl;
 	}
 	if (stopFlag.load()) {
 		return;
 	}
 	stopFlag.store(true);
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	
+	KCP::isleep(10);
+	//std::this_thread::sleep_for(std::chrono::seconds(1));
 	ikcp_release(m_kcp);
 	m_kcp = nullptr;
 	start_waving();

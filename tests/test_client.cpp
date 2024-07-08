@@ -100,7 +100,7 @@ void testConcurrency(const std::string& server_ip, int server_port, int num_conn
     // num_connections = 1;
     std::vector<std::thread> threads;
     for (int i = 0; i < num_connections; ++i) {
-        threads.emplace_back(connectToServer, server_ip, server_port, rand() % 65535);
+        threads.emplace_back(connectToServer, server_ip, server_port, (rand() % 65535 + 65535) % 65535);
     }
 
     for (auto& t : threads) {
