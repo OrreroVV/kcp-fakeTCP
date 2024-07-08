@@ -38,9 +38,17 @@ set(LIB_LIB
 #     tests/test_kcp.cpp
 # )
 
-add_executable(b tests/b.cpp)
-add_dependencies(b hzh)
-target_link_libraries(b ${LIB_LIB})# 设置编译选项
+add_executable(test tests/test_kcp_client.cc)
+add_dependencies(test hzh)
+target_link_libraries(test ${LIB_LIB})# 设置编译选项
+
+add_executable(client tests/test_client.cpp)
+add_dependencies(client hzh)
+target_link_libraries(client ${LIB_LIB})# 设置编译选项
+
+add_executable(server tests/test_server.cpp)
+add_dependencies(server hzh)
+target_link_libraries(server ${LIB_LIB})# 设置编译选项
 
 add_executable(fake_tcp tests/test_fake_tcp.cc)
 add_dependencies(fake_tcp hzh)

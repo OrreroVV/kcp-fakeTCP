@@ -119,28 +119,29 @@ int StartFakeTcp(const char *ip, short port) {
 		perror("socket");
 		return -1;
 	}
+
 	int on = 1;
 	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
 		perror("setsockopt");
 		return -1;
 	}
 
-	// 设置 "don't fragment" 标志
-    on = IP_PMTUDISC_DO;  // IP_PMTUDISC_DO: 禁止分段
-    if (setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER, &on, sizeof(on)) < 0) {
-        perror("setsockopt failed");
-        close(sock);
-        return -1;
-    }
+	// // 设置 "don't fragment" 标志
+    // on = IP_PMTUDISC_DO;  // IP_PMTUDISC_DO: 禁止分段
+    // if (setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER, &on, sizeof(on)) < 0) {
+    //     perror("setsockopt failed");
+    //     close(sock);
+    //     return -1;
+    // }
 
 
-	struct sockaddr_in local;
-	setAddr(ip, port, &local);
+	// struct sockaddr_in local;
+	// setAddr("127.0.0.1", port, &local);
 
-	if (bind(sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
-		perror("bind");
-		return -1;
-	}
+	// if (bind(sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
+	// 	perror("bind");
+	// 	return -1;
+	// }
 
 	return sock;
 }
@@ -172,7 +173,7 @@ int StartServer(const char *ip, short port) {
 	local.sin_family = AF_INET;
 	local.sin_addr.s_addr = INADDR_ANY;
 	local.sin_port = htons(port);
-	// local.sin_addr.s_addr = inet_addr(ip);
+	local.sin_addr.s_addr = inet_addr(ip);
 	
 
 	if (bind(listen_sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
