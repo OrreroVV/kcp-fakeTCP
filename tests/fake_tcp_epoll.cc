@@ -114,8 +114,9 @@ int main(int argc, char *argv[])
 				perror("epoll_wait");
 				break;
 			}
+			std:: cout << "nfds: " << nfds << std::endl;
 			for (int i = 0; i < nfds; ++i) {
-				// std::cout << "event_data_fd: " << events[i].data.fd << std::endl;
+				std::cout << "event_data_fd: " << events[i].data.fd << std::endl;
 				if (events[i].data.fd == listen_sock) {
 					struct sockaddr_in peer;
 					socklen_t len = sizeof(peer);
@@ -135,7 +136,7 @@ int main(int argc, char *argv[])
 						continue;
 					}
 
-					ev.events = EPOLLHUP;
+					ev.events = EPOLLIN | EPOLLHUP;
 					ev.data.fd = fd;
 					if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
 						perror("epoll_ctl: conn_sock");
@@ -146,14 +147,76 @@ int main(int argc, char *argv[])
 					std::shared_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, s_port, s_ip, c_port, c_ip));
 					handleClient->start_kcp_server();
 					clients[fd] = std::move(handleClient);
+
 				} else {
-					uint32_t st = events[i].events;
-					if (st & EPOLLHUP) {
-						std::cout << "client send fin" << std::endl;
-						assert(clients.count(events[i].data.fd));
-						clients.erase(events[i].data.fd);
-						clients[events[i].data.fd] = nullptr;
+					uint32_t state = events[i].events;
+					int fd = events[i].data.fd;
+					std::shared_ptr<KCP::KcpHandleClient> client = clients[fd];
+
+					if (state & (EPOLLHUP)) {
+						std::cout << "closing, close fd" << std::endl;
+						clients.erase(clients.find(events[i].data.fd));
 						close(events[i].data.fd);
+						continue;
+					}
+
+					if (state & (EPOLLIN)) {
+						char recv_buffer[2048] = {};
+						int ret = read(fd, recv_buffer, 2048);
+						std::cout << "read: " << ret << std::endl;
+						std::string filePath;
+						if (ret > 0) {
+							
+							int kcp_ret = ikcp_input(client->m_kcp, recv_buffer, ret);
+							if (kcp_ret < 0) {
+								printf("ikcp_input error: %d\n", ret);
+								continue;
+							}
+							char buffer[2048] {};
+							int len = ikcp_recv(client->m_kcp, buffer, ret);
+							std::cout << "recv len: " << len << std::endl;
+							if (len > 0) {
+								// data
+							if (!client->read_file) {
+								assert(ret >= 128 + 8);
+								client->read_file = true;
+
+								memcpy(&client->file_size, buffer, sizeof(uint32_t));
+								client->file_size = ntohl(client->file_size);
+								printf("File size: %u\n", client->file_size);
+
+								char file_name[128] = { 0 };
+								memcpy(file_name, buffer + sizeof(uint32_t), 128);
+								printf("File name: %s\n", file_name);
+								
+								filePath = client->prefix_path + client->random_24() + ".txt";
+								// file_name = random_24();
+								// filePath = prefix_path + file_name;
+								client->file.open(filePath, std::ios::out | std::ios::binary);
+								if (len > 8 + 128) {
+									client->file.write(buffer + 8 + 128, ret - (8 + 128));
+									client->file_sended += ret - (8 + 128);
+								}
+								continue;
+							}
+							client->file.write(buffer, ret);
+							client->file_sended += ret;
+							std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
+							if (client->file_sended >= client->file_size) {
+								printf("File %s received completely\n", filePath.c_str());
+								client->file.close();
+								// flagSended = true;
+							}
+
+							}
+						} else if (!ret) {
+							client->Close();
+							clients.erase(clients.find(events[i].data.fd));
+							close(fd);
+						} else {
+						}
+						
+
 					}
 				}
 			}

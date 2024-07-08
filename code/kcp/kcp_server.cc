@@ -29,7 +29,7 @@ KcpHandleClient::KcpHandleClient(int fd, int s_port, const char* s_ip, int c_por
     :fd(fd), s_port(s_port), s_ip(s_ip), 
     c_port(c_port), c_ip(c_ip) {
 
-    m_kcp = ikcp_create(0x1, (void*)this);
+    m_kcp = ikcp_create(c_port, (void*)this);
 
     read_file = false;
     prefix_path = "/home/hzh/workspace/work/bin/";
@@ -57,6 +57,14 @@ std::string random_24() {
         random_string += characters[std::rand() % characters.size()];
     }
 	return random_string;
+}
+
+void* KcpHandleClient::run_tcp_server_loop() {
+	while (!stopFlag.load()) {
+		ikcp_update(m_kcp, KCP::iclock());
+		KCP::isleep(1);
+	}
+	return nullptr;
 }
 
 void* KcpHandleClient::run_tcp_server() {
@@ -88,13 +96,12 @@ void* KcpHandleClient::run_tcp_server() {
 			std::cout << "looping" << std::endl;
 		}
 		ikcp_update(m_kcp, KCP::iclock());
-		KCP::isleep(1);
-		continue;
+		// KCP::isleep(1);
+		// continue;
 		
 		len = read(fd, buffer, sizeof(buffer));
 		if (len > 0) {
-			
-			std::cout << "server recv len: " << len << std::endl;
+			std::cout << "read c_port: " << c_port << "len: " << len << std::endl;
 			int ret = ikcp_input(m_kcp, buffer, len);
 			if (ret < 0) {
 				printf("ikcp_input error: %d\n", ret);
@@ -139,26 +146,25 @@ void* KcpHandleClient::run_tcp_server() {
 				file.write(recv_buffer, ret);
 				file_sended += ret;
 				if (file_sended >= file_size) {
-					printf("File %s received completely\n", file_path.c_str());
+					printf("File %s received completely c_port: %d\n\n", file_path.c_str(), c_port);
 					// flagSended = true;
 				}
 				// printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
 
 			} else if (!ret) {
 				std::cout << "ret = 0" << std::endl;
-				break;
 			}
 		} else if (!len) {
 			std::cout << "len: 0" << std::endl;
-			break;
 		} else {
 			
 		}
-		KCP::isleep(1);
+		KCP::isleep(10);
 	}
 
 	std::cout << "fd: " << fd << "tcp_server end" << std::endl;
 	file.close();
+	Close();
 	return nullptr;
 }
 
@@ -195,7 +201,9 @@ void KcpHandleClient::start_kcp_server() {
 
 
     stopFlag.store(false);
-	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
+	
+	// tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
+	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server_loop, this));
 	tcp_server_thread->detach(); 
 }
 
@@ -221,6 +229,7 @@ void KcpHandleClient::Close() {
     std::this_thread::sleep_for(std::chrono::seconds(2));
     ikcp_release(m_kcp);
 	m_kcp = nullptr;
+	close(fd);
 }
 
 

@@ -24,6 +24,7 @@ public:
 
     void start_kcp_server();
     void* run_tcp_server();
+    void* run_tcp_server_loop();
 
     std::string random_24();
     void Close();
