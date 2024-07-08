@@ -442,7 +442,7 @@ void KcpClient::Close() {
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	ikcp_release(m_kcp);
 	m_kcp = nullptr;
-	// start_waving();
+	start_waving();
 }
 
 }

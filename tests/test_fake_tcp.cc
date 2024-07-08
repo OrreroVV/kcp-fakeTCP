@@ -125,8 +125,16 @@ int main(int argc, char *argv[])
 						perror("accept");
 						continue;
 					}
+					
 					std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
 					"new_fd: " << fd << std::endl;
+					
+					// 设置新连接为非阻塞
+					if (setNonBlocking(fd) == -1)
+					{
+						close(fd);
+						continue;
+					}
 
 					ev.events = EPOLLRDHUP;
 					ev.data.fd = fd;
@@ -140,12 +148,7 @@ int main(int argc, char *argv[])
 					handleClient->start_kcp_server();
 					assert(!clients.count(fd));
 					clients[fd] = std::move(handleClient);
-					// 设置新连接为非阻塞
-					// if (setNonBlocking(fd) == -1)
-					// {
-					// 	close(fd);
-					// 	continue;
-					// }
+
 				} else {
 					if (events[i].events & (EPOLLRDHUP)) {
 						std::cout << "client send fin" << std::endl;

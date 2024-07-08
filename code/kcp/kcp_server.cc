@@ -75,9 +75,10 @@ void* KcpHandleClient::run_tcp_server() {
 	uint32_t file_sended = 0;
 	uint32_t file_size = 0;
 	// bool flagSended = false;
-	int cnt = 0;
+	int cnt = -1;
 	while (!stopFlag.load()) {
-		if (++cnt % 1000 == 0) {
+		cnt++;
+		if (cnt % 1000 == 0) {
 			std::cout << "looping" << std::endl;
 		}
 		ikcp_update(m_kcp, KCP::iclock());
@@ -134,6 +135,7 @@ void* KcpHandleClient::run_tcp_server() {
 				// printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
 
 			} else if (!ret) {
+				std::cout << "ret = 0" << std::endl;
 				break;
 			}
 		} else if (!len) {
@@ -185,7 +187,6 @@ void KcpHandleClient::start_kcp_server() {
     stopFlag.store(false);
 	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
 	tcp_server_thread->detach(); 
-
 }
 
 void KcpHandleClient::Close() {
