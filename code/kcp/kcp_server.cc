@@ -75,8 +75,11 @@ void* KcpHandleClient::run_tcp_server() {
 	uint32_t file_sended = 0;
 	uint32_t file_size = 0;
 	// bool flagSended = false;
-
+	int cnt = 0;
 	while (!stopFlag.load()) {
+		if (++cnt % 1000 == 0) {
+			std::cout << "looping" << std::endl;
+		}
 		ikcp_update(m_kcp, KCP::iclock());
 		len = read(fd, buffer, sizeof(buffer));
 		std::cout << "server recv len: " << len << std::endl;
@@ -134,6 +137,7 @@ void* KcpHandleClient::run_tcp_server() {
 				break;
 			}
 		} else if (!len) {
+			std::cout << "len: 0" << std::endl;
 			break;
 		} else {
 			perror("recvfrom");
@@ -141,7 +145,7 @@ void* KcpHandleClient::run_tcp_server() {
 		KCP::isleep(1);
 	}
 
-
+	std::cout << "fd: " << fd << "tcp_server end" << std::endl;
 	file.close();
 	return nullptr;
 }
