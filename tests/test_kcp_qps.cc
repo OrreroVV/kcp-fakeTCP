@@ -82,6 +82,7 @@ void testConcurrency(const std::string& server_ip, int server_port, int num_conn
     for (auto& t : threads) {
         t.join();
     }
+    sleep(10);
 }
 
 int main(int argc, char *argv[])

@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
 	printf("run in %s mode...\n", server ? "server" : "client");
 	int sock = server ? KCP::StartServer(s_ip, s_port) : KCP::StartFakeTcp(c_ip, c_port);
 
-	std::map<int, std::unique_ptr<KCP::KcpHandleClient>> clients;
+	std::map<int, std::shared_ptr<KCP::KcpHandleClient>> clients;
 	std::vector<std::unique_ptr<std::thread>>threads;
 
 	if (sock < 0) {
@@ -136,32 +136,88 @@ int main(int argc, char *argv[])
 						continue;
 					}
 
-					// ev.events = EPOLLRDHUP;
-					// ev.data.fd = fd;
-					// if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-					// 	perror("epoll_ctl: conn_sock");
-                    //     close(fd);
-                    //     continue;
-					// }
+					ev.events = EPOLLIN | EPOLLOUT;
+					ev.data.fd = fd;
+					if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+						perror("epoll_ctl: conn_sock");
+                        close(fd);
+                        continue;
+					}
 					std::cout << "Epoll create handleClient" << std::endl;
-					std::unique_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, s_port, s_ip, c_port, c_ip));
+					std::shared_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, s_port, s_ip, c_port, c_ip));
 					handleClient->start_kcp_server();
 					assert(!clients.count(fd));
 					clients[fd] = std::move(handleClient);
 
 				} else {
-					if (events[i].events & (EPOLLRDHUP)) {
-						std::cout << "client send fin" << std::endl;
-						char buffer[2048] = {};
-						int n = read(events[i].data.fd, buffer, sizeof(buffer));
-						if (!n) {
-							std::cout << "closing, close fd" << std::endl;
-							assert(clients.count(events[i].data.fd));
+					uint32_t state = events[i].events;
+					int fd = events[i].data.fd;
+					std::shared_ptr<KCP::KcpHandleClient> client = clients[fd];
+
+					if (state & (EPOLLIN)) {
+						char recv_buffer[2048] = {};
+						int ret = read(fd, recv_buffer, strlen(recv_buffer));
+						if (ret > 0) {
+							
+							int kcp_ret = ikcp_input(client->m_kcp, recv_buffer, strlen(recv_buffer));
+							if (kcp_ret < 0) {
+								printf("ikcp_input error: %d\n", ret);
+								continue;
+							}
+							char buffer[2048] {};
+							int len = ikcp_recv(client->m_kcp, buffer, strlen(buffer));
+							if (len > 0) {
+								// data
+							if (!client->read_file) {
+								assert(ret >= 128 + 8);
+								client->read_file = true;
+
+								memcpy(&client->file_size, recv_buffer, sizeof(uint32_t));
+								client->file_size = ntohl(client->file_size);
+								printf("File size: %u\n", client->file_size);
+
+								char file_name[128] {};
+								memcpy(file_name, recv_buffer + sizeof(uint32_t), sizeof(file_name));
+								printf("File name: %s\n", file_name);
+								
+								file_path = client->prefix_path + client->random_24() + ".txt";
+								// file_name = random_24();
+								// file_path = prefix_path + file_name;
+								client->file.open(file_path, std::ios::out | std::ios::binary);
+
+								if (len > 8 + 128) {
+									client->file.write(recv_buffer + 8 + 128, ret - (8 + 128));
+									client->file_sended += ret - (8 + 128);
+								}
+								continue;
+							}
+							client->file.write(recv_buffer, ret);
+							client->file_sended += ret;
+							if (client->file_sended >= client->file_size) {
+								printf("File %s received completely\n", file_path.c_str());
+								client->file.close();
+								// flagSended = true;
+							}
+
+							}
+						} else if (!ret) {
+							client->Close();
 							clients.erase(clients.find(events[i].data.fd));
-							close(events[i].data.fd);
+							close(fd);
 						} else {
-							perror("clients");
 						}
+						
+						// std::cout << "client send fin" << std::endl;
+						// char buffer[2048] = {};
+						// int n = read(events[i].data.fd, buffer, sizeof(buffer));
+						// if (!n) {
+						// 	std::cout << "closing, close fd" << std::endl;
+						// 	assert(clients.count(events[i].data.fd));
+						// 	clients.erase(clients.find(events[i].data.fd));
+						// 	close(events[i].data.fd);
+						// } else {
+						// 	perror("clients");
+						// }
 					}
 				}
 			}

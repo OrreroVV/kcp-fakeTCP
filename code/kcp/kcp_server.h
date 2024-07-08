@@ -25,6 +25,7 @@ public:
     void start_kcp_server();
     void* run_tcp_server();
 
+    std::string random_24();
     void Close();
 
 
@@ -34,6 +35,12 @@ public:
     const char* s_ip;
     int c_port;
     const char* c_ip;
+    bool read_file;
+    std::ofstream file;
+    std::string prefix_path;
+    uint32_t file_sended;
+	uint32_t file_size;
+
     ikcpcb* m_kcp;
     std::atomic<bool> stopFlag;
     std::unique_ptr<std::thread> tcp_server_thread;

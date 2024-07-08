@@ -361,7 +361,6 @@ void KcpClient::start_hand_shake() {
 }
 
 void KcpClient::start_waving() {
-	// std::cout <<"start_waving" << std::endl;
 	int ret = 0;
 	char data[41] = {};
 	struct sockaddr_in dest;
@@ -371,6 +370,7 @@ void KcpClient::start_waving() {
 	// std::cout <<"s_state: " << s_state << std::endl;
 	if (s_state == TCP_ESTABLISHED) { 
 		// client fin
+		std::cout << "TCP_ESTABLISHED" << std::endl;
 		build_ip_tcp_header(data, "", 0, 1, 0, 0, 1);
 		ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
 		if (ret < 0) {
@@ -381,7 +381,7 @@ void KcpClient::start_waving() {
 	// server ack
 	tcp_info info;
 	if (s_state == TCP_FIN_WAIT1) {
-		// std::cout <<"TCP_FIN_WAIT1" << std::endl;
+		std::cout <<"TCP_FIN_WAIT1" << std::endl;
 		while (true) {
 			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
 			if (ret < 0) {
@@ -399,7 +399,7 @@ void KcpClient::start_waving() {
 	if (s_state == TCP_FIN_WAIT2) {
 		//server fin
 		
-		// std::cout <<"TCP_FIN_WAIT2" << std::endl;
+		std::cout <<"TCP_FIN_WAIT2" << std::endl;
 		while (true) {
 			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
 			if (ret < 0) {
@@ -417,7 +417,8 @@ void KcpClient::start_waving() {
 	}
 
 	if (s_state == TCP_CLOSE_WAIT) {
-		// client ack
+		//client ack
+		std::cout << "TCP_CLOSE_WAIT" << std::endl;
 		build_ip_tcp_header(data, "", 0, 1, 0, 0, 0);
 		ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
 		if (ret < 0) {

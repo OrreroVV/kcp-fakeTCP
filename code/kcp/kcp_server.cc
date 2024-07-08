@@ -30,6 +30,12 @@ KcpHandleClient::KcpHandleClient(int fd, int s_port, const char* s_ip, int c_por
     c_port(c_port), c_ip(c_ip) {
 
     m_kcp = ikcp_create(0x1, (void*)this);
+
+    read_file = false;
+    prefix_path = "/home/hzh/workspace/work/bin/";
+    file_sended = 0;
+	file_size = 0;
+
     assert(m_kcp);
 }
 
@@ -91,11 +97,11 @@ void* KcpHandleClient::run_tcp_server() {
 				printf("ikcp_input error: %d\n", ret);
 				continue;
 			}
-			std::string send_buffer = "hello world";
-			ret = send(fd, send_buffer.c_str(), send_buffer.size(), 0);
-			if (ret == -1) {
-				perror("send");
-			}
+			// std::string send_buffer = "hello world";
+			// ret = send(fd, send_buffer.c_str(), send_buffer.size(), 0);
+			// if (ret == -1) {
+			// 	perror("send");
+			// }
 
 			// 发送8 + 128字节确认文件大小，文件名
 			char recv_buffer[2048] = { 0 };
@@ -186,15 +192,25 @@ void KcpHandleClient::start_kcp_server() {
 
 
     stopFlag.store(false);
-	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
-	tcp_server_thread->detach(); 
+	// tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
+	// tcp_server_thread->detach(); 
+}
+
+std::string KcpHandleClient::random_24() {
+    const std::string characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    std::string random_string;
+    random_string.reserve(24);
+
+    // 初始化随机数生成器
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+    for (size_t i = 0; i < 24; ++i) {
+        random_string += characters[std::rand() % characters.size()];
+    }
+	return random_string;
 }
 
 void KcpHandleClient::Close() {
-	while (ikcp_waitsnd(m_kcp) > 0) {
-		KCP::isleep(1000);
-		std::cout << "fd: " << fd <<" waitsnd: " << ikcp_waitsnd(m_kcp) << std::endl;
-	}
 	if (stopFlag.load()) {
 		return;
 	}
