@@ -173,7 +173,7 @@ int StartServer(const char *ip, short port) {
 	local.sin_family = AF_INET;
 	local.sin_addr.s_addr = INADDR_ANY;
 	local.sin_port = htons(port);
-	local.sin_addr.s_addr = inet_addr("127.0.0.1");
+	// local.sin_addr.s_addr = inet_addr("0.0.0.0");
 	
 
 	if (bind(listen_sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
