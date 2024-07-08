@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
 					
 					std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
 					"new_fd: " << fd << std::endl;
-					
+
 					// 设置新连接为非阻塞
 					if (setNonBlocking(fd) == -1)
 					{
@@ -136,13 +136,13 @@ int main(int argc, char *argv[])
 						continue;
 					}
 
-					ev.events = EPOLLRDHUP;
-					ev.data.fd = fd;
-					if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-						perror("epoll_ctl: conn_sock");
-                        close(fd);
-                        continue;
-					}
+					// ev.events = EPOLLRDHUP;
+					// ev.data.fd = fd;
+					// if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+					// 	perror("epoll_ctl: conn_sock");
+                    //     close(fd);
+                    //     continue;
+					// }
 					std::cout << "Epoll create handleClient" << std::endl;
 					std::unique_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, s_port, s_ip, c_port, c_ip));
 					handleClient->start_kcp_server();

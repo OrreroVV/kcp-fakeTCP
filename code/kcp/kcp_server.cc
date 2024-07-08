@@ -35,7 +35,7 @@ KcpHandleClient::KcpHandleClient(int fd, int s_port, const char* s_ip, int c_por
 
 
 KcpHandleClient::~KcpHandleClient() {
-    ikcp_release(m_kcp);
+	Close();
 }
 
 // 生成24位随机字符串的函数
@@ -83,8 +83,9 @@ void* KcpHandleClient::run_tcp_server() {
 		}
 		ikcp_update(m_kcp, KCP::iclock());
 		len = read(fd, buffer, sizeof(buffer));
-		std::cout << "server recv len: " << len << std::endl;
 		if (len > 0) {
+			
+			std::cout << "server recv len: " << len << std::endl;
 			int ret = ikcp_input(m_kcp, buffer, len);
 			if (ret < 0) {
 				printf("ikcp_input error: %d\n", ret);
@@ -142,7 +143,7 @@ void* KcpHandleClient::run_tcp_server() {
 			std::cout << "len: 0" << std::endl;
 			break;
 		} else {
-			perror("recvfrom");
+			
 		}
 		KCP::isleep(1);
 	}
@@ -190,8 +191,17 @@ void KcpHandleClient::start_kcp_server() {
 }
 
 void KcpHandleClient::Close() {
+	while (ikcp_waitsnd(m_kcp) > 0) {
+		KCP::isleep(1000);
+		std::cout << "fd: " << fd <<" waitsnd: " << ikcp_waitsnd(m_kcp) << std::endl;
+	}
+	if (stopFlag.load()) {
+		return;
+	}
 	stopFlag.store(true);
     std::this_thread::sleep_for(std::chrono::seconds(2));
+    ikcp_release(m_kcp);
+	m_kcp = nullptr;
 }
 
 
