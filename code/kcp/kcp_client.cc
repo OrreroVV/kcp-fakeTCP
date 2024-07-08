@@ -6,7 +6,7 @@ namespace KCP {
 int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user)
 {
 	KcpClient *client = static_cast<KcpClient*>(user);
-	std::cout << "send: " << len << std::endl;
+	std::cout << "send cb: " << len << std::endl;
 	// std::cout <<"client fd: " << client->fd << std::endl;
 
 	int sended = 0;
@@ -293,7 +293,7 @@ void KcpClient::send_file() {
 	file.seekg(0, std::ios::end);
 	uint32_t file_size = file.tellg();
 	file.seekg(0, std::ios::beg);
-
+	std::cout << "file_size: " << file_size << std::endl;
 	size_t file_size_n = htonl(file_size);
 	memcpy(temp, &file_size_n, sizeof(uint32_t));
 	memcpy(temp + sizeof(uint32_t), &filename[0], filename.size());
