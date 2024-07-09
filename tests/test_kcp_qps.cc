@@ -54,7 +54,7 @@ static const char *s_ip = "8.138.86.207";
 static const char *c_ip = "192.168.61.243";
 std::string file_path;
 static short s_port = 6666;
-std::vector<std::unique_ptr<KCP::KcpClient>>clients;
+std::map<int, std::unique_ptr<KCP::KcpClient>>clients;
 std::mutex clientsMutex;
 
 
@@ -74,7 +74,7 @@ void connectToServer(const std::string& server_ip, uint16_t server_port, uint16_
 	client->start_hand_shake();
     {
         std::lock_guard<std::mutex> lock(clientsMutex);
-        clients.push_back(std::move(client));
+        clients[sock] = std::move(client);
     }
 }
 
@@ -83,11 +83,12 @@ void testConcurrency(const std::string& server_ip, int server_port, int num_conn
     // num_connections = 1;
     std::vector<std::thread> threads;
     for (int i = 0; i < num_connections; ++i) {
-        threads.emplace_back(connectToServer, server_ip, server_port, 30000 + i);
+        threads.emplace_back(connectToServer, server_ip, server_port, 20000 + i);
     }
 
     for (auto& t : threads) {
         t.join();
+
     }
 }
 

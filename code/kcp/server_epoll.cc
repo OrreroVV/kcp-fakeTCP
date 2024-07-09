@@ -83,7 +83,6 @@ void* ServerEpoll::updateKcp() {
                 it = clients.erase(it);
                 continue;
             }
-
             ikcp_update(client->m_kcp, KCP::iclock());
 
             ++it;
