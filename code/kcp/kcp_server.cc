@@ -225,13 +225,12 @@ std::string KcpHandleClient::random_24() {
 }
 
 void KcpHandleClient::Close() {
-	if (stopFlag.load()) {
+	if (m_kcp) {
 		return;
 	}
-	stopFlag.store(true);
-	KCP::isleep(10);
     ikcp_release(m_kcp);
 	m_kcp = nullptr;
+	close(fd);
 }
 
 

@@ -75,9 +75,18 @@ int ServerEpoll::startServer() {
 
 void* ServerEpoll::updateKcp() {
     while (!stopFlag.load()) {
-        for (auto [k, v] : update_queue) {
-            ikcp_update(v, KCP::iclock());
-        }
+            // std::lock_guard<std::mutex> lock(update_mutex);
+            for (auto it = clients.begin(); it != clients.end();) {
+                std::shared_ptr<KCP::KcpHandleClient> client = it->second;
+                ikcp_update(client->m_kcp, KCP::iclock());
+                if (client->stopFlag.load()) {
+                    if (!ikcp_waitsnd(client->m_kcp)) {
+                        it = clients.erase(it);
+                        continue;
+                    }
+                }
+                ++it;
+            }
         KCP::isleep(10);
     }
     return nullptr;
@@ -114,6 +123,7 @@ void ServerEpoll::startEpoll() {
 
     create_thread();
 
+    std::atomic<int>cnt;
     struct epoll_event events[MAX_EVENTS];
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
@@ -153,9 +163,8 @@ void ServerEpoll::startEpoll() {
                 }
                 std::cout << "Epoll create handleClient" << std::endl;
                 std::shared_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, server_port, server_ip, c_port, c_ip));
-                ikcpcb* kcp = handleClient->start_kcp_server();
+                handleClient->start_kcp_server();
 
-                update_queue[std::to_string(c_port)] = std::move(kcp);
                 clients[fd] = std::move(handleClient);
 
             } else {
@@ -165,10 +174,18 @@ void ServerEpoll::startEpoll() {
 
                 if (state & (EPOLLHUP)) {
                     std::cout << "closing, close fd" << std::endl;
-                    client->Close();
-                    update_queue.erase(update_queue.find(std::to_string(client->c_port)));
-                    clients.erase(clients.find(events[i].data.fd));
-                    close(events[i].data.fd);
+                    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
+                        perror("epoll_ctl: EPOLL_CTL_DEL");
+                    }
+                    
+                    {
+                        
+                        client->stopFlag.store(true);
+                        // std::lock_guard<std::mutex> lock(update_mutex);
+                        // clients.erase(clients.find(events[i].data.fd));
+                    }
+
+                    // close(events[i].data.fd);
                     continue;
                 }
 
@@ -201,10 +218,12 @@ void ServerEpoll::startEpoll() {
                             memcpy(file_name, buffer + sizeof(uint32_t), 128);
                             // printf("File name: %s\n", file_name);
                             
-                            filePath = client->prefix_path + client->random_24() + ".txt";
+                            client->filePath = client->prefix_path + std::to_string(cnt.load()) + ".txt";
+                            cnt.fetch_add(1);
+                            
                             // file_name = random_24();
                             // filePath = prefix_path + file_name;
-                            client->file.open(filePath, std::ios::out | std::ios::binary);
+                            client->file.open(client->filePath, std::ios::out | std::ios::binary);
                             
                             if (len > 8 + 128) {
                                 client->file.write(buffer + 8 + 128, ret - (8 + 128));
@@ -216,7 +235,7 @@ void ServerEpoll::startEpoll() {
                         client->file_sended += ret;
                         // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
                         if (client->file_sended >= client->file_size) {
-                            printf("File %s received completely\n", filePath.c_str());
+                            printf("File %s received completely\n", client->filePath.c_str());
                             client->file.close();
                             // flagSended = true;
                         }
@@ -224,10 +243,16 @@ void ServerEpoll::startEpoll() {
                         }
                     } else if (!ret) {
                         std::cout << "closing, close fd" << fd << std::endl;
-                        client->Close();
-                        update_queue.erase(update_queue.find(std::to_string(client->c_port)));
-                        clients.erase(clients.find(fd));
-                        close(fd);
+                        client->stopFlag.store(true);
+                        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
+                            perror("epoll_ctl: EPOLL_CTL_DEL");
+                        }
+                        // client->Close();
+                        {
+                            // std::lock_guard<std::mutex> lock(update_mutex);
+                            // clients.erase(clients.find(fd));
+                        }
+                        // close(fd);
                     } else {
                     }
                     

@@ -3,6 +3,7 @@
 
 #include <map>
 #include <memory>
+#include <mutex>
 #include "kcp_server.h"
 
 namespace KCP {
@@ -25,8 +26,8 @@ private:
     const char* server_ip;
     uint16_t server_port;
     std::atomic<bool> stopFlag;
+    std::mutex update_mutex;
     std::map<int, std::shared_ptr<KCP::KcpHandleClient>> clients;
-    std::map<std::string, ikcpcb*> update_queue;
     std::unique_ptr<std::thread> update_thread;
 };
 
