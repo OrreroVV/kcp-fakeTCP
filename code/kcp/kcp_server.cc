@@ -29,7 +29,7 @@ KcpHandleClient::KcpHandleClient(int fd, uint16_t s_port, const char* s_ip, uint
     :fd(fd), s_port(s_port), s_ip(s_ip), 
     c_port(c_port), c_ip(c_ip) {
 	
-	std::cout << "c_port: " << c_port << std::endl;
+	// std::cout << "c_port: " << c_port << std::endl;
     m_kcp = ikcp_create(c_port, (void*)this);
 
     read_file = false;
@@ -43,7 +43,7 @@ KcpHandleClient::KcpHandleClient(int fd, uint16_t s_port, const char* s_ip, uint
 
 
 KcpHandleClient::~KcpHandleClient() {
-	std::cout << "~" << fd << std::endl;
+	// std::cout << "~" << fd << std::endl;
 	Close();
 }
 
@@ -71,7 +71,7 @@ void* KcpHandleClient::run_tcp_server_loop() {
 }
 
 void* KcpHandleClient::run_tcp_server() {
-    std::cout << "run_tcp_server" << std::endl;
+    // std::cout << "run_tcp_server" << std::endl;
 	assert(fd && m_kcp);
 	// struct sockaddr_in from_addr;
 	// socklen_t from_size = sizeof(sockaddr_in);

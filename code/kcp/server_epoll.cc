@@ -75,17 +75,19 @@ int ServerEpoll::startServer() {
 
 void* ServerEpoll::updateKcp() {
     while (!stopFlag.load()) {
-        // std::lock_guard<std::mutex> lock(update_mutex);
-        for (auto it = clients.begin(); it != clients.end();) {
-            std::shared_ptr<KCP::KcpHandleClient> client = it->second;
-            
-            if (client->stopFlag.load()) {
-                it = clients.erase(it);
-                continue;
-            }
-            ikcp_update(client->m_kcp, KCP::iclock());
+        {
+            std::lock_guard<std::mutex> lock(update_mutex);
+            for (auto it = clients.begin(); it != clients.end();) {
+                std::shared_ptr<KCP::KcpHandleClient> client = it->second;
+                
+                if (client->stopFlag.load()) {
+                    it = clients.erase(it);
+                    continue;
+                }
+                ikcp_update(client->m_kcp, KCP::iclock());
 
-            ++it;
+                ++it;
+            }
         }
         KCP::isleep(10);
     }
@@ -131,9 +133,9 @@ void ServerEpoll::startEpoll() {
             perror("epoll_wait");
             break;
         }
-        std:: cout << "nfds: " << nfds << std::endl;
+        // std:: cout << "nfds: " << nfds << std::endl;
         for (int i = 0; i < nfds; ++i) {
-            std::cout << "event_data_fd: " << events[i].data.fd << std::endl;
+            // std::cout << "event_data_fd: " << events[i].data.fd << std::endl;
             if (events[i].data.fd == listen_sock) {
                 struct sockaddr_in peer;
                 socklen_t len = sizeof(peer);
@@ -143,8 +145,8 @@ void ServerEpoll::startEpoll() {
                     continue;
                 }
                 
-                std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
-                " new_fd: " << fd << std::endl;
+                // std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
+                // " new_fd: " << fd << std::endl;
                 
                 uint32_t c_port = ntohs(peer.sin_port);
                 char* c_ip = inet_ntoa(peer.sin_addr);
@@ -161,12 +163,12 @@ void ServerEpoll::startEpoll() {
                     close(fd);
                     continue;
                 }
-                std::cout << "Epoll create handleClient" << std::endl;
+                // std::cout << "Epoll create handleClient" << std::endl;
                 std::shared_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, server_port, server_ip, c_port, c_ip));
                 handleClient->start_kcp_server();
 
+                std::lock_guard<std::mutex> lock(update_mutex);
                 clients[fd] = std::move(handleClient);
-
             } else {
                 uint32_t state = events[i].events;
                 int fd = events[i].data.fd;
@@ -178,9 +180,9 @@ void ServerEpoll::startEpoll() {
                         perror("epoll_ctl: EPOLL_CTL_DEL");
                     }
                     
+                    client->stopFlag.store(true);
                     {
                         
-                        client->stopFlag.store(true);
                         // std::lock_guard<std::mutex> lock(update_mutex);
                         // clients.erase(clients.find(events[i].data.fd));
                     }
@@ -235,18 +237,19 @@ void ServerEpoll::startEpoll() {
                             client->file_sended += ret;
                             // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
                             if (client->file_sended >= client->file_size) {
-                                printf("File %s received completely\n", client->filePath.c_str());
+                                // printf("File %s received completely\n", client->filePath.c_str());
                                 client->file.close();
                                 // flagSended = true;
                             }
 
                         }
                     } else if (!ret) {
-                        std::cout << "closing, close fd" << fd << std::endl;
-                        client->stopFlag.store(true);
+                        // std::cout << "closing, close fd" << fd << std::endl;
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
                             perror("epoll_ctl: EPOLL_CTL_DEL");
                         }
+                        assert(client);
+                        client->stopFlag.store(true);
                         // client->Close();
                         {
                             // std::lock_guard<std::mutex> lock(update_mutex);
