@@ -5,6 +5,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <chrono>
+#include <vector>
+#include <thread>
 
 #define SERVER_IP "8.138.86.207"
 #define SERVER_PORT 6666
@@ -72,12 +74,27 @@ void sendFile(const char* filepath, const char* filename) {
     close(sock);
 }
 
+void testConcurrency(const char* filepath, const char* filename, int num_connections) {
+    // num_connections = 1;
+    std::vector<std::thread> threads;
+    for (int i = 0; i < num_connections; ++i) {
+        threads.emplace_back(sendFile, filepath, filename);
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+}
+
 int main() {
-    const char* filepath = "/home/hzh/workspace/work/logs/data.txt";
+    const char* filepath = "/home/hzh/workspace/kcp-fakeTCP/logs/data.txt";
     const char* filename = "data.txt"; // 该文件名会发送给服务器，可以与实际文件名不同
     // 开始计时
+    int num = 1;
     auto start = std::chrono::high_resolution_clock::now();
-    sendFile(filepath, filename);
+    //sendFile(filepath, filename);
+    testConcurrency(filepath, filename, num);
     // 结束计时
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;

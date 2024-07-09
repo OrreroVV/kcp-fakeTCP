@@ -370,7 +370,7 @@ void KcpClient::start_waving() {
 	// std::cout <<"s_state: " << s_state << std::endl;
 	if (s_state == TCP_ESTABLISHED) { 
 		// client fin
-		std::cout << "TCP_ESTABLISHED" << std::endl;
+		// std::cout << "TCP_ESTABLISHED" << std::endl;
 		build_ip_tcp_header(data, "", 0, 1, 0, 0, 1);
 		ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
 		if (ret < 0) {
@@ -446,7 +446,9 @@ void KcpClient::Close() {
 	//std::this_thread::sleep_for(std::chrono::seconds(1));
 	ikcp_release(m_kcp);
 	m_kcp = nullptr;
-	start_waving();
+	while (s_state != TCP_CLOSING) {
+		start_waving();
+	}
 }
 
 }
