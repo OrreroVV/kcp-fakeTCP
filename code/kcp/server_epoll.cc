@@ -75,18 +75,19 @@ int ServerEpoll::startServer() {
 
 void* ServerEpoll::updateKcp() {
     while (!stopFlag.load()) {
-            // std::lock_guard<std::mutex> lock(update_mutex);
-            for (auto it = clients.begin(); it != clients.end();) {
-                std::shared_ptr<KCP::KcpHandleClient> client = it->second;
-                ikcp_update(client->m_kcp, KCP::iclock());
-                if (client->stopFlag.load()) {
-                    if (!ikcp_waitsnd(client->m_kcp)) {
-                        it = clients.erase(it);
-                        continue;
-                    }
-                }
-                ++it;
+        // std::lock_guard<std::mutex> lock(update_mutex);
+        for (auto it = clients.begin(); it != clients.end();) {
+            std::shared_ptr<KCP::KcpHandleClient> client = it->second;
+            
+            if (client->stopFlag.load()) {
+                it = clients.erase(it);
+                continue;
             }
+
+            ikcp_update(client->m_kcp, KCP::iclock());
+
+            ++it;
+        }
         KCP::isleep(10);
     }
     return nullptr;
@@ -206,39 +207,39 @@ void ServerEpoll::startEpoll() {
                         // std::cout << "recv len: " << len << std::endl;
                         if (len > 0) {
                             // data
-                        if (!client->read_file) {
-                            assert(ret >= 128 + 8);
-                            client->read_file = true;
+                            if (!client->read_file) {
+                                assert(ret >= 128 + 8);
+                                client->read_file = true;
 
-                            memcpy(&client->file_size, buffer, sizeof(uint32_t));
-                            client->file_size = ntohl(client->file_size);
-                            // printf("File size: %u\n", client->file_size);
+                                memcpy(&client->file_size, buffer, sizeof(uint32_t));
+                                client->file_size = ntohl(client->file_size);
+                                // printf("File size: %u\n", client->file_size);
 
-                            char file_name[128] = { 0 };
-                            memcpy(file_name, buffer + sizeof(uint32_t), 128);
-                            // printf("File name: %s\n", file_name);
-                            
-                            client->filePath = client->prefix_path + std::to_string(cnt.load()) + ".txt";
-                            cnt.fetch_add(1);
-                            
-                            // file_name = random_24();
-                            // filePath = prefix_path + file_name;
-                            client->file.open(client->filePath, std::ios::out | std::ios::binary);
-                            
-                            if (len > 8 + 128) {
-                                client->file.write(buffer + 8 + 128, ret - (8 + 128));
-                                client->file_sended += ret - (8 + 128);
+                                char file_name[128] = { 0 };
+                                memcpy(file_name, buffer + sizeof(uint32_t), 128);
+                                // printf("File name: %s\n", file_name);
+                                
+                                client->filePath = client->prefix_path + std::to_string(cnt.load()) + ".txt";
+                                cnt.fetch_add(1);
+                                
+                                // file_name = random_24();
+                                // filePath = prefix_path + file_name;
+                                client->file.open(client->filePath, std::ios::out | std::ios::binary);
+                                
+                                if (len > 8 + 128) {
+                                    client->file.write(buffer + 8 + 128, ret - (8 + 128));
+                                    client->file_sended += ret - (8 + 128);
+                                }
+                                continue;
                             }
-                            continue;
-                        }
-                        client->file.write(buffer, ret);
-                        client->file_sended += ret;
-                        // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
-                        if (client->file_sended >= client->file_size) {
-                            printf("File %s received completely\n", client->filePath.c_str());
-                            client->file.close();
-                            // flagSended = true;
-                        }
+                            client->file.write(buffer, ret);
+                            client->file_sended += ret;
+                            // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
+                            if (client->file_sended >= client->file_size) {
+                                printf("File %s received completely\n", client->filePath.c_str());
+                                client->file.close();
+                                // flagSended = true;
+                            }
 
                         }
                     } else if (!ret) {

@@ -225,7 +225,7 @@ std::string KcpHandleClient::random_24() {
 }
 
 void KcpHandleClient::Close() {
-	if (m_kcp) {
+	if (!m_kcp) {
 		return;
 	}
     ikcp_release(m_kcp);
