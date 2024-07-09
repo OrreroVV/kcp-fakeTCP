@@ -77,7 +77,7 @@ void testConcurrency(const std::string& server_ip, int server_port, int num_conn
     // num_connections = 1;
     std::vector<std::thread> threads;
     for (int i = 0; i < num_connections; ++i) {
-        threads.emplace_back(connectToServer, server_ip, server_port, 10000 + i);
+        threads.emplace_back(connectToServer, server_ip, server_port, 25000 + i);
     }
 
     for (auto& t : threads) {
@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
 			file_path = "/home/hzh/workspace/kcp-fakeTCP/logs/data.txt";
 	}
 
-    int num_connections = 10; // 设置你要测试的并发连接数
+    int num_connections = 1000; // 设置你要测试的并发连接数
 
     auto start_time = std::chrono::high_resolution_clock::now();
     testConcurrency(s_ip, s_port, num_connections);

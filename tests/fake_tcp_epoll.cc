@@ -50,7 +50,7 @@ int setNonBlocking(int fd) {
 }
 
 static const char *s_ip = "8.138.86.207";
-static const char *c_ip = "192.168.61.243";
+char *c_ip = "192.168.61.243";
 static short s_port = 6666;
 
 // void test(int sock, int c_port) {
@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
 					" new_fd: " << fd << std::endl;
 					
 					c_port = ntohs(peer.sin_port);
+					c_ip = inet_ntoa(peer.sin_addr);
 					// 设置新连接为非阻塞
 					if (setNonBlocking(fd) == -1)
 					{
@@ -164,7 +165,7 @@ int main(int argc, char *argv[])
 					if (state & (EPOLLIN)) {
 						char recv_buffer[2048] = {};
 						int ret = read(fd, recv_buffer, 2048);
-						std::cout << "read: " << ret << std::endl;
+						// std::cout << "read: " << ret << std::endl;
 						std::string filePath;
 						if (ret > 0) {
 							
@@ -175,7 +176,7 @@ int main(int argc, char *argv[])
 							}
 							char buffer[2048] {};
 							int len = ikcp_recv(client->m_kcp, buffer, ret);
-							std::cout << "recv len: " << len << std::endl;
+							// std::cout << "recv len: " << len << std::endl;
 							if (len > 0) {
 								// data
 							if (!client->read_file) {
@@ -184,11 +185,11 @@ int main(int argc, char *argv[])
 
 								memcpy(&client->file_size, buffer, sizeof(uint32_t));
 								client->file_size = ntohl(client->file_size);
-								printf("File size: %u\n", client->file_size);
+								// printf("File size: %u\n", client->file_size);
 
 								char file_name[128] = { 0 };
 								memcpy(file_name, buffer + sizeof(uint32_t), 128);
-								printf("File name: %s\n", file_name);
+								// printf("File name: %s\n", file_name);
 								
 								filePath = client->prefix_path + client->random_24() + ".txt";
 								// file_name = random_24();
@@ -203,7 +204,7 @@ int main(int argc, char *argv[])
 							}
 							client->file.write(buffer, ret);
 							client->file_sended += ret;
-							std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
+							// std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
 							if (client->file_sended >= client->file_size) {
 								printf("File %s received completely\n", filePath.c_str());
 								client->file.close();
