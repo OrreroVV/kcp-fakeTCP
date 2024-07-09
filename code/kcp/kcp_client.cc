@@ -6,7 +6,7 @@ namespace KCP {
 int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user)
 {
 	KcpClient *client = static_cast<KcpClient*>(user);
-	std::cout << "send cb: " << len << std::endl;
+	// std::cout << "send cb: " << len << std::endl;
 	// std::cout <<"client fd: " << client->fd << std::endl;
 
 	int sended = 0;
@@ -86,15 +86,16 @@ int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user)
 
 KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip, const char* s_ip, std::string file_path)
  	:fd(fd), c_port(c_port), s_port(s_port), c_ip(c_ip), s_ip(s_ip), file_path(file_path){
-	s_state = TCP_CLOSED;
 
+	s_state = TCP_CLOSED;
+	stopFlag.store(false);
 	ip_id = 1231;
 	server_ack_seq.store(0);
 	CLIENT_SUM_SEND.store(0);
 	std::srand(static_cast<unsigned>(std::time(0)));
 	// seq.store(rand());
 	seq = rand();
-	std::cout << "c_port: " << c_port << std::endl;
+	// std::cout << "c_port: " << c_port << std::endl;
 	m_kcp = ikcp_create(c_port, this);
 	assert(m_kcp);
 }
@@ -213,8 +214,6 @@ void KcpClient::run_tcp_client() {
 		}
 		KCP::isleep(1);
 	}
-
-	Close();
 }
 
 void* KcpClient::client_loop()
@@ -293,7 +292,7 @@ void KcpClient::send_file() {
 	file.seekg(0, std::ios::end);
 	uint32_t file_size = file.tellg();
 	file.seekg(0, std::ios::beg);
-	std::cout << "file_size: " << file_size << std::endl;
+	// std::cout << "file_size: " << file_size << std::endl;
 	size_t file_size_n = htonl(file_size);
 	memcpy(temp, &file_size_n, sizeof(uint32_t));
 	memcpy(temp + sizeof(uint32_t), &filename[0], filename.size());
@@ -308,12 +307,25 @@ void KcpClient::send_file() {
 		std::streamsize bytesRead = file.gcount();
 		totalBytesRead += bytesRead;
 		ikcp_send(m_kcp, buf, s);
-		std::cout <<"send: " << s << std::endl;
+		// std::cout <<"send: " << s << "\n";
 	}
 	file.close();
 	// std::cout <<"send file finished" << std::endl;
 
-	Close();
+	while (ikcp_waitsnd(m_kcp) > 0) {
+		KCP::isleep(10);
+		// std::cout << fd << "wait send\n";
+	}
+	if (stopFlag.load()) {
+		return;
+	}
+	stopFlag.store(true);
+	KCP::isleep(10);
+	while (s_state != TCP_CLOSING) {
+		s_state = TCP_ESTABLISHED;
+		start_waving();
+		// std::cout << "fd: " << fd << std::endl;
+	}
 }
 
 void KcpClient::start_hand_shake() {
@@ -338,7 +350,7 @@ void KcpClient::start_hand_shake() {
 	while (true) {
 		ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&recv_dest, &addrlen);
 		if (ret < 0) {
-			exit(1);
+			perror("recvfrom");
 		}
 		prase_tcp_packet(data, ret, &info);
 
@@ -374,18 +386,20 @@ void KcpClient::start_waving() {
 		build_ip_tcp_header(data, "", 0, 1, 0, 0, 1);
 		ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
 		if (ret < 0) {
-			exit(1);
+			perror("sendto");
+			return;
 		}
 		s_state = TCP_FIN_WAIT1;
 	}
 	// server ack
 	tcp_info info;
 	if (s_state == TCP_FIN_WAIT1) {
-		std::cout << fd << "TCP_FIN_WAIT1" << std::endl;
+		// std::cout << fd << "TCP_FIN_WAIT1" << std::endl;
 		while (true) {
 			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
 			if (ret < 0) {
-				exit(1);
+				perror("recvfrom TCP_FIN_WAIT1");
+				return;
 			}
 			prase_tcp_packet(data, ret, &info);
 			if (info.port_dst == c_port && info.ack_seq == seq + CLIENT_SUM_SEND.load() + 1) {
@@ -405,11 +419,12 @@ void KcpClient::start_waving() {
 	if (s_state == TCP_FIN_WAIT2) {
 		//server fin
 		
-		std::cout << fd << " TCP_FIN_WAIT2" << std::endl;
+		// std::cout << fd << " TCP_FIN_WAIT2" << std::endl;
 		while (true) {
 			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
 			if (ret < 0) {
-				exit(1);
+				perror("recvfrom");
+				return;
 			}
 			prase_tcp_packet(data, ret, &info);
 			if (info.port_dst == c_port && info.fin) {
@@ -427,9 +442,10 @@ void KcpClient::start_waving() {
 		build_ip_tcp_header(data, "", 0, 1, 0, 0, 0);
 		ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
 		
-		std::cout << "TCP_CLOSE_WAIT: " << ret << std::endl;
+		// std::cout << "TCP_CLOSE_WAIT: " << ret << std::endl;
 		if (ret < 0) {
-			exit(1);
+			perror("TCP_CLOSE_WAIT");
+			return;
 		}
 		s_state = TCP_CLOSING;
 	}
@@ -439,22 +455,10 @@ void KcpClient::Close() {
 	if (!m_kcp) {
 		return;
 	}
-	while (ikcp_waitsnd(m_kcp) > 0) {
-		KCP::isleep(100);
-		std::cout << "fd: " << fd <<" waitsnd: " << ikcp_waitsnd(m_kcp) << std::endl;
-	}
-	if (stopFlag.load()) {
-		return;
-	}
-	stopFlag.store(true);
-	
-	KCP::isleep(10);
 	//std::this_thread::sleep_for(std::chrono::seconds(1));
 	ikcp_release(m_kcp);
 	m_kcp = nullptr;
-	while (s_state != TCP_CLOSING) {
-		start_waving();
-	}
+	close(fd);
 }
 
 }
