@@ -171,7 +171,7 @@ void* KcpHandleClient::run_tcp_server() {
 	return nullptr;
 }
 
-void KcpHandleClient::start_kcp_server() {
+ikcpcb* KcpHandleClient::start_kcp_server() {
 	//char buf[65535];
 	assert(m_kcp && fd);
 	ikcp_setoutput(m_kcp, tcp_server_send_cb);
@@ -204,10 +204,10 @@ void KcpHandleClient::start_kcp_server() {
 
 
     stopFlag.store(false);
-	
+	return m_kcp;
 	// tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
-	tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server_loop, this));
-	tcp_server_thread->detach(); 
+	// tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server_loop, this));
+	// tcp_server_thread->detach(); 
 }
 
 std::string KcpHandleClient::random_24() {
@@ -232,7 +232,6 @@ void KcpHandleClient::Close() {
 	KCP::isleep(10);
     ikcp_release(m_kcp);
 	m_kcp = nullptr;
-	close(fd);
 }
 
 

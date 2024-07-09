@@ -22,7 +22,7 @@ public:
     KcpHandleClient(int fd, uint16_t s_port, const char* s_ip, uint16_t c_port, const char* c_ip);
     ~KcpHandleClient();
 
-    void start_kcp_server();
+    ikcpcb* start_kcp_server();
     void* run_tcp_server();
     void* run_tcp_server_loop();
 

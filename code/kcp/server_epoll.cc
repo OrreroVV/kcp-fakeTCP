@@ -17,6 +17,19 @@
 
 namespace KCP {
 
+ServerEpoll::ServerEpoll(const char* server_ip, uint16_t server_port) :server_ip(server_ip), server_port(server_port){
+    stopFlag.store(true);
+}
+
+ServerEpoll::~ServerEpoll() {
+    for (auto [k, v] : clients) {
+        close(k);
+    }
+    clients.clear();
+    close(listen_sock);
+}
+
+
 int ServerEpoll::setNonBlocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
@@ -33,12 +46,11 @@ int ServerEpoll::setNonBlocking(int fd) {
 }
 
 int ServerEpoll::startServer() {
-	listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listen_sock < 0) {
-		perror("socket");   
-        return -1;
+		perror("socket");
+		return -1;
 	}
-
 
 	int optval = 1;
 	setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
@@ -52,14 +64,29 @@ int ServerEpoll::startServer() {
 
 	if (bind(listen_sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
 		perror("bind");
-        return -1;
+		return -1;
 	}
 
 	if (listen(listen_sock, 1024) < 0) {
 		perror("listen");
-        return -1;
 	}
     return 0;
+}
+
+void* ServerEpoll::updateKcp() {
+    while (!stopFlag.load()) {
+        for (auto [k, v] : update_queue) {
+            ikcp_update(v, KCP::iclock());
+        }
+        KCP::isleep(10);
+    }
+    return nullptr;
+}
+
+void ServerEpoll::create_thread() {
+    stopFlag.store(false);
+    update_thread = std::unique_ptr<std::thread>(new std::thread(&ServerEpoll::updateKcp, this));
+    update_thread->detach();
 }
 
 void ServerEpoll::startEpoll() {
@@ -67,7 +94,7 @@ void ServerEpoll::startEpoll() {
         return;
     }
 
-    int epoll_fd = epoll_create1(0);
+    epoll_fd = epoll_create1(0);
     if (epoll_fd == -1)
     {
         perror("epoll_create1");
@@ -78,13 +105,14 @@ void ServerEpoll::startEpoll() {
     struct epoll_event ev;
     ev.events = EPOLLIN;
     ev.data.fd = listen_sock;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_sock, &ev) == -1)
-    {
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_sock, &ev) == -1) {
         perror("epoll_ctl: listen_sock");
         close(listen_sock);
         close(epoll_fd);
         exit(1);
     }
+
+    create_thread();
 
     struct epoll_event events[MAX_EVENTS];
     while (true) {
@@ -111,8 +139,7 @@ void ServerEpoll::startEpoll() {
                 uint32_t c_port = ntohs(peer.sin_port);
                 char* c_ip = inet_ntoa(peer.sin_addr);
                 // 设置新连接为非阻塞
-                if (setNonBlocking(fd) == -1)
-                {
+                if (setNonBlocking(fd) == -1) {
                     close(fd);
                     continue;
                 }
@@ -126,7 +153,9 @@ void ServerEpoll::startEpoll() {
                 }
                 std::cout << "Epoll create handleClient" << std::endl;
                 std::shared_ptr<KCP::KcpHandleClient>handleClient(new KCP::KcpHandleClient(fd, server_port, server_ip, c_port, c_ip));
-                handleClient->start_kcp_server();
+                ikcpcb* kcp = handleClient->start_kcp_server();
+
+                update_queue[std::to_string(c_port)] = std::move(kcp);
                 clients[fd] = std::move(handleClient);
 
             } else {
@@ -136,6 +165,8 @@ void ServerEpoll::startEpoll() {
 
                 if (state & (EPOLLHUP)) {
                     std::cout << "closing, close fd" << std::endl;
+                    client->Close();
+                    update_queue.erase(update_queue.find(std::to_string(client->c_port)));
                     clients.erase(clients.find(events[i].data.fd));
                     close(events[i].data.fd);
                     continue;
@@ -194,6 +225,7 @@ void ServerEpoll::startEpoll() {
                     } else if (!ret) {
                         std::cout << "closing, close fd" << fd << std::endl;
                         client->Close();
+                        update_queue.erase(update_queue.find(std::to_string(client->c_port)));
                         clients.erase(clients.find(fd));
                         close(fd);
                     } else {

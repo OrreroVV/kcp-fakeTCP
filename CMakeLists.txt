@@ -24,6 +24,7 @@ set(LIB_SRC
     code/kcp/kcp_socket.cc
     code/kcp/kcp_server.cc
     code/kcp/kcp_client.cc
+    code/kcp/server_epoll.cc
     )
 
 add_library(hzh SHARED ${LIB_SRC})
