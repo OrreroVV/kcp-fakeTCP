@@ -187,7 +187,12 @@ void KcpClient::run_tcp_client() {
 				int ret = ikcp_input(m_kcp, buffer + sizeof(struct iphdr) + sizeof(struct tcphdr), len - (sizeof(struct iphdr) + sizeof(struct tcphdr)));
 				if (ret < 0)
 				{
-					printf("ikcp_input error: %d\n", ret);
+					printf("fd: %d port: %d ikcp_input error: %d\n", fd, c_port, ret);
+					// KCP::tcp_info info;
+					// KCP::prase_tcp_packet(buffer, len, &info);
+					// if (info.fin) {
+					// 	break;
+					// }
 					continue;
 				}
 
@@ -208,7 +213,6 @@ void KcpClient::run_tcp_client() {
 				continue;
 			}
 			if (info.fin) {
-				s_state = TCP_FIN_WAIT1;
 				break;
 			}
 		}
@@ -223,7 +227,7 @@ void* KcpClient::client_loop()
 	while (!stopFlag.load())
 	{
 		if (++cnt % 1000 == 0) {
-			std::cout << "looping" << std::endl;
+			std::cout << "fd: " << fd << "port: " << c_port << "looping" << std::endl;
 		}
 		ikcp_update(m_kcp, KCP::iclock());
 		KCP::isleep(10);
@@ -317,10 +321,10 @@ void KcpClient::send_file() {
 		// std::cout << fd << "wait send\n";
 	}
 	if (stopFlag.load()) {
+		assert(false);
 		return;
 	}
 	stopFlag.store(true);
-	KCP::isleep(10);
 	while (s_state != TCP_CLOSING) {
 		s_state = TCP_ESTABLISHED;
 		start_waving();
