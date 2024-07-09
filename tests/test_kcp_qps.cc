@@ -29,6 +29,7 @@
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <vector>
+#include <mutex>
 
 #define UDP_MTU 1400
 
@@ -53,10 +54,11 @@ static const char *s_ip = "8.138.86.207";
 static const char *c_ip = "192.168.61.243";
 std::string file_path;
 static short s_port = 6666;
-std::map<int, std::unique_ptr<KCP::KcpClient>>clients;
+std::vector<std::unique_ptr<KCP::KcpClient>>clients;
+std::mutex clientsMutex;
 
 
-void connectToServer(const std::string& server_ip, int server_port, int client_port) {
+void connectToServer(const std::string& server_ip, uint16_t server_port, uint16_t client_port) {
 	// 打开原始套接字
 	int sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
 	if (sock < 0) {
@@ -70,33 +72,36 @@ void connectToServer(const std::string& server_ip, int server_port, int client_p
 
 	std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, client_port, s_port, c_ip, s_ip, file_path));
 	client->start_hand_shake();
-    clients[sock] = std::move(client);
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex);
+        clients.push_back(std::move(client));
+    }
 }
 
+int cnt = 0;
 void testConcurrency(const std::string& server_ip, int server_port, int num_connections) {
     // num_connections = 1;
     std::vector<std::thread> threads;
     for (int i = 0; i < num_connections; ++i) {
-        threads.emplace_back(connectToServer, server_ip, server_port, 20002 + i);
+        threads.emplace_back(connectToServer, server_ip, server_port, 30000 + i);
     }
 
     for (auto& t : threads) {
         t.join();
     }
-
 }
 
 
 int main(int argc, char *argv[])
 {
-
 	if (file_path.empty()) {
 			file_path = "/home/hzh/workspace/kcp-fakeTCP/logs/data.txt";
 	}
 
-    int num_connections = 1; 
+    int num_connections = 1000;
 
     auto start_time = std::chrono::high_resolution_clock::now();
+    // connectToServer(s_ip, s_port, 10500);
     testConcurrency(s_ip, s_port, num_connections);
     auto end_time = std::chrono::high_resolution_clock::now();  
 
