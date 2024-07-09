@@ -66,6 +66,7 @@ void sendFile(const char* filepath, const char* filename) {
         file.read(buffer, BUFFER_SIZE);
         std::streamsize bytesRead = file.gcount();
         send(sock, buffer, bytesRead, 0);
+        std::cout << sock << " send: " << bytesRead << std::endl;
     }
 
 

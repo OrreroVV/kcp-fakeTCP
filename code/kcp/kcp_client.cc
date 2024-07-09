@@ -393,7 +393,13 @@ void KcpClient::start_waving() {
 			}
 		}
 		assert(info.ack);
-		s_state = TCP_FIN_WAIT2;
+		if (info.fin) {
+			server_ack_seq.store(info.seq + 1);
+			seq++;
+			s_state = TCP_CLOSE_WAIT;
+		} else {
+			s_state = TCP_FIN_WAIT2;
+		}
 	}
 
 	if (s_state == TCP_FIN_WAIT2) {
