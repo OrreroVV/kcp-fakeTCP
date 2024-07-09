@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 			file_path = "/home/hzh/workspace/kcp-fakeTCP/logs/data.txt";
 	}
 
-    int num_connections = 1000;
+    int num_connections = 1;
 
     auto start_time = std::chrono::high_resolution_clock::now();
     // connectToServer(s_ip, s_port, 10500);

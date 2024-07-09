@@ -68,7 +68,7 @@ void sendFile(const char* filepath, const char* filename) {
         send(sock, buffer, bytesRead, 0);
         std::cout << sock << " send: " << bytesRead << std::endl;
     }
-
+    
 
     // 关闭文件和socket
     file.close();
