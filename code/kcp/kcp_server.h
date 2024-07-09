@@ -19,7 +19,7 @@ class KcpHandleClient {
 public:
     typedef std::shared_ptr<KcpHandleClient> ptr;
 
-    KcpHandleClient(int fd, int s_port, const char* s_ip, int c_port, const char* c_ip);
+    KcpHandleClient(int fd, uint16_t s_port, const char* s_ip, uint16_t c_port, const char* c_ip);
     ~KcpHandleClient();
 
     void start_kcp_server();
@@ -32,15 +32,16 @@ public:
 
     
     int fd;
-    int s_port;
+    uint16_t s_port;
     const char* s_ip;
-    int c_port;
+    uint16_t c_port;
     const char* c_ip;
     bool read_file;
     std::ofstream file;
     std::string prefix_path;
     uint32_t file_sended;
 	uint32_t file_size;
+    std::string filePath;
 
     ikcpcb* m_kcp;
     std::atomic<bool> stopFlag;

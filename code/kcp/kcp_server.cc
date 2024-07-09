@@ -25,7 +25,7 @@ int tcp_server_send_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
     return (size_t)sended;
 }
 
-KcpHandleClient::KcpHandleClient(int fd, int s_port, const char* s_ip, int c_port, const char* c_ip)
+KcpHandleClient::KcpHandleClient(int fd, uint16_t s_port, const char* s_ip, uint16_t c_port, const char* c_ip)
     :fd(fd), s_port(s_port), s_ip(s_ip), 
     c_port(c_port), c_ip(c_ip) {
 	
@@ -36,6 +36,7 @@ KcpHandleClient::KcpHandleClient(int fd, int s_port, const char* s_ip, int c_por
     prefix_path = "/home/hzh/workspace/work/bin/";
     file_sended = 0;
 	file_size = 0;
+	filePath = "";
 
     assert(m_kcp);
 }
