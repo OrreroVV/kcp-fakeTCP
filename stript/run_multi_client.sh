@@ -2,7 +2,7 @@
 
 server_ip="8.138.86.207"
 server_port=6666
-num_clients=10020
+num_clients=10500
 
 # function cleanup {
 #     echo "Cleaning up..."

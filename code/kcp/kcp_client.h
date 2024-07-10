@@ -67,6 +67,7 @@ public:
     //uint32_t CLIENT_SUM_SEND;
 
     std::atomic<bool> stopFlag;
+    std::atomic<bool> finishSend;
     std::unique_ptr<std::thread> kcp_loop_thread;
     std::unique_ptr<std::thread> kcp_client_thread;
 private:

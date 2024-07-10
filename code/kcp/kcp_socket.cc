@@ -21,6 +21,7 @@ void prase_tcp_packet(const char* buffer, size_t len, tcp_info* info) {
     info->port_dst = ntohs(tcp_header.th_dport);
     info->seq = ntohl(tcp_header.seq);
 	info->fin = tcp_header.fin;
+	info->rst = tcp_header.rst;
 
 	// std::cout << "ack: " << info->ack << std::endl;
     // std::cout << "seq: " << info->seq << std::endl;

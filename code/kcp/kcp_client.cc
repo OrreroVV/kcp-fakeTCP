@@ -88,14 +88,18 @@ KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip,
  	:fd(fd), c_port(c_port), s_port(s_port), c_ip(c_ip), s_ip(s_ip), file_path(file_path){
 
 	s_state = TCP_CLOSED;
+
 	stopFlag.store(false);
+	finishSend.store(false);
+
 	ip_id = 1231;
+
 	server_ack_seq.store(0);
 	CLIENT_SUM_SEND.store(0);
+	
 	std::srand(static_cast<unsigned>(std::time(0)));
-	// seq.store(rand());
 	seq = rand();
-	// std::cout << "c_port: " << c_port << std::endl;
+	
 	m_kcp = ikcp_create(c_port, this);
 	assert(m_kcp);
 }
@@ -204,7 +208,10 @@ void KcpClient::run_tcp_client() {
 				if (ret > 0)
 				{
 					printf("ikcp_recv ret = %d,buf=%s\n", ret, recv_buffer);
-					stopFlag.store(true);
+					// stopFlag.store(true);
+					if (!strcmp(recv_buffer, "send_finish")) {
+						finishSend.store(true);
+					}
 				}
 			}
 		} else if (!len) {
@@ -316,21 +323,20 @@ void KcpClient::send_file() {
 		// std::cout <<"send: " << s << "\n";
 	}
 	file.close();
-	// std::cout <<"send file finished" << std::endl;
+
+	while (!finishSend.load()) {
+		KCP::isleep(10);
+	}
 
 	while (ikcp_waitsnd(m_kcp) > 0) {
 		KCP::isleep(10);
-		// std::cout << fd << "wait send\n";
 	}
-	if (stopFlag.load()) {
-		assert(false);
-		return;
-	}
-	stopFlag.store(true);
+	
+	
 	while (s_state != TCP_CLOSING) {
 		s_state = TCP_ESTABLISHED;
+		std::cout << "start_waving fd: " << fd << std::endl;
 		start_waving();
-		// std::cout << "fd: " << fd << std::endl;
 	}
 }
 
@@ -365,6 +371,7 @@ void KcpClient::start_hand_shake() {
 				std::cout << "server fin start break" << std::endl;
 				s_state = TCP_ESTABLISHED;
 				start_waving();
+				return;
 			}
 			break;
 		}
@@ -402,63 +409,146 @@ void KcpClient::start_waving() {
 		}
 		s_state = TCP_FIN_WAIT1;
 	}
-	// server ack
-	tcp_info info;
-	if (s_state == TCP_FIN_WAIT1) {
-		// std::cout << fd << "TCP_FIN_WAIT1" << std::endl;
-		while (true) {
-			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
+	
+	fd_set read_fds;
+	struct timeval timeout;
+
+	auto start = std::chrono::high_resolution_clock::now();
+	auto end = start + std::chrono::seconds(3);
+	while (std::chrono::high_resolution_clock::now() <= end) {
+		FD_ZERO(&read_fds);
+        FD_SET(fd, &read_fds);
+		timeout.tv_sec = 3;
+        timeout.tv_usec = 0;
+		// server ack
+		tcp_info info;
+		ret = select(fd + 1, &read_fds, NULL, NULL, &timeout);
+		if (ret == -1) {
+            perror("select");
+            return;
+        } else if (ret == 0) {
+			std::cout << "timeout" << std::endl;
+            return;
+        }
+
+		if (s_state == TCP_FIN_WAIT1) {
+			if (FD_ISSET(fd, &read_fds)) {
+				ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
+				if (ret < 0) {
+					perror("recvfrom TCP_FIN_WAIT1");
+					return;
+				}
+				prase_tcp_packet(data, ret, &info);
+				
+				if (info.rst) {
+					s_state = TCP_CLOSING;
+					return;
+				}
+				if (info.port_dst == c_port && info.ack_seq == seq + CLIENT_SUM_SEND.load() + 1) {
+					assert(info.ack);
+					if (info.fin) {
+						server_ack_seq.store(info.seq + 1);
+						seq++;
+						s_state = TCP_CLOSE_WAIT;
+					} else {
+						s_state = TCP_FIN_WAIT2;
+						continue;
+					}
+					
+				}
+			}
+			// while (true) {
+			// 	ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
+			// 	if (ret < 0) {
+			// 		perror("recvfrom TCP_FIN_WAIT1");
+			// 		return;
+			// 	}
+			// 	prase_tcp_packet(data, ret, &info);
+			// 	if (info.port_dst == c_port && info.ack_seq == seq + CLIENT_SUM_SEND.load() + 1) {
+			// 		break;
+			// 	}
+			// }
+			// assert(info.ack);
+			// if (info.fin) {
+			// 	server_ack_seq.store(info.seq + 1);
+			// 	seq++;
+			// 	s_state = TCP_CLOSE_WAIT;
+			// } else {
+			// 	s_state = TCP_FIN_WAIT2;
+			// }
+			// continue;
+		}
+
+		if (s_state == TCP_FIN_WAIT2) {
+			//server fin
+			
+			if (FD_ISSET(fd, &read_fds)) {
+				std::cout << "TCP_FIN_WAIT2" << std::endl;
+				ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
+				if (ret < 0) {
+					perror("recvfrom");
+					return;
+				}
+				prase_tcp_packet(data, ret, &info);
+
+				if (info.port_dst == c_port) {
+					std::cout << info.rst << " " << ntohl(info.rst) << std::endl;
+					if (info.rst) {
+						s_state = TCP_CLOSING;
+						return;
+					}
+					assert(info.fin);
+					server_ack_seq.store(info.seq + 1);
+					seq++;
+					s_state = TCP_CLOSE_WAIT;
+				}
+			}
+
+			// std::cout << fd << " TCP_FIN_WAIT2" << std::endl;
+			// while (true) {
+			// 	ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
+			// 	if (ret < 0) {
+			// 		perror("recvfrom");
+			// 		return;
+			// 	}
+			// 	prase_tcp_packet(data, ret, &info);
+			// 	if (info.rst) {
+			// 		s_state = TCP_CLOSING;
+			// 		return;
+			// 	}
+
+			// 	if (info.port_dst == c_port) {
+			// 		std::cout << info.rst << " " << ntohl(info.rst) << std::endl;
+			// 		if (info.rst) {
+			// 			s_state = TCP_CLOSING;
+			// 			return;
+			// 		}
+			// 		if (info.fin) {
+			// 			server_ack_seq.store(info.seq + 1);
+			// 			seq++;
+			// 			break;
+			// 		}
+			// 	}
+			// }
+		}
+
+		if (s_state == TCP_CLOSE_WAIT) {
+			//client ack
+			build_ip_tcp_header(data, "", 0, 1, 0, 0, 0);
+			ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
+			
+			// std::cout << "TCP_CLOSE_WAIT: " << ret << std::endl;
 			if (ret < 0) {
-				perror("recvfrom TCP_FIN_WAIT1");
+				perror("TCP_CLOSE_WAIT");
 				return;
 			}
-			prase_tcp_packet(data, ret, &info);
-			if (info.port_dst == c_port && info.ack_seq == seq + CLIENT_SUM_SEND.load() + 1) {
-				break;
-			}
+			s_state = TCP_CLOSING;
 		}
-		assert(info.ack);
-		if (info.fin) {
-			server_ack_seq.store(info.seq + 1);
-			seq++;
-			s_state = TCP_CLOSE_WAIT;
-		} else {
-			s_state = TCP_FIN_WAIT2;
-		}
-	}
-
-	if (s_state == TCP_FIN_WAIT2) {
-		//server fin
-		
-		// std::cout << fd << " TCP_FIN_WAIT2" << std::endl;
-		while (true) {
-			ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&dest, &addrlen);
-			if (ret < 0) {
-				perror("recvfrom");
-				return;
-			}
-			prase_tcp_packet(data, ret, &info);
-			if (info.port_dst == c_port && info.fin) {
-				server_ack_seq.store(info.seq + 1);
-				seq++;
-				break;
-			}
-		}
-		assert(info.fin);
-		s_state = TCP_CLOSE_WAIT;
-	}
-
-	if (s_state == TCP_CLOSE_WAIT) {
-		//client ack
-		build_ip_tcp_header(data, "", 0, 1, 0, 0, 0);
-		ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
-		
-		// std::cout << "TCP_CLOSE_WAIT: " << ret << std::endl;
-		if (ret < 0) {
-			perror("TCP_CLOSE_WAIT");
+		if (start >= end) {
+			std::cout << "timeout" << std::endl;
+			s_state = TCP_CLOSING;
 			return;
 		}
-		s_state = TCP_CLOSING;
 	}
 }
 
