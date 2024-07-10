@@ -46,6 +46,12 @@ public:
     void kcp_client_start();
     void send_file();
     void start_waving();
+
+
+    void waving_send_fin();
+    void waving_recv_ack();
+    void waving_recv_fin();
+    void waving_send_ack();
     
     void Close();
 
