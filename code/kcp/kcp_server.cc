@@ -151,6 +151,8 @@ void* KcpHandleClient::run_tcp_server() {
 				if (file_sended >= file_size) {
 					printf("File %s received completely c_port: %d\n\n", file_path.c_str(), c_port);
 					// flagSended = true;
+					std::string send_buffer = "send_finished";
+					::send(fd, send_buffer.c_str(), send_buffer.size(), 0);
 				}
 				// printf("ikcp_recv ret = %d,buf=%s\n",ret, recv_buffer);
 

@@ -67,7 +67,7 @@ int ServerEpoll::startServer() {
 		return -1;
 	}
 
-	if (listen(listen_sock, 1024) < 0) {
+	if (listen(listen_sock, 4096) < 0) {
 		perror("listen");
 	}
     return 0;
@@ -79,7 +79,6 @@ void* ServerEpoll::updateKcp() {
             std::lock_guard<std::mutex> lock(update_mutex);
             for (auto it = clients.begin(); it != clients.end();) {
                 std::shared_ptr<KCP::KcpHandleClient> client = it->second;
-                
                 if (client->stopFlag.load()) {
                     it = clients.erase(it);
                     continue;

@@ -204,6 +204,7 @@ void KcpClient::run_tcp_client() {
 				if (ret > 0)
 				{
 					printf("ikcp_recv ret = %d,buf=%s\n", ret, recv_buffer);
+					stopFlag.store(true);
 				}
 			}
 		} else if (!len) {
