@@ -332,7 +332,7 @@ void KcpClient::send_file() {
 	}
 	KCP::isleep(10);
 	
-	
+	return;
 	auto start = std::chrono::high_resolution_clock::now();
 	auto end = start + std::chrono::seconds(3);
 	while (true) {
