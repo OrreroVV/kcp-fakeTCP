@@ -101,7 +101,7 @@ KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip,
 }
 
 KcpClient::~KcpClient() {
-	std::cout << "~" << fd << std::endl;
+	// std::cout << "~" << fd << std::endl;
 	Close();
 }
 
@@ -178,21 +178,22 @@ void KcpClient::run_tcp_client() {
 			if (len > (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr)))
 			{
 				
-				// 如果不是ack包，发送确认收到
-				char send_buffer[41] = {};
-				build_ip_tcp_header(send_buffer, "", 0, 1, 1, 0, 0);
-				::sendto(fd, send_buffer, IP_TCP_HEADER_SIZE, 0, (sockaddr*)&src, src_len);
+				// // 如果不是ack包，发送确认收到
+				// char send_buffer[41] = {};
+				// build_ip_tcp_header(send_buffer, "", 0, 1, 1, 0, 0);
+				// ::sendto(fd, send_buffer, IP_TCP_HEADER_SIZE, 0, (sockaddr*)&src, src_len);
 
 
 				int ret = ikcp_input(m_kcp, buffer + sizeof(struct iphdr) + sizeof(struct tcphdr), len - (sizeof(struct iphdr) + sizeof(struct tcphdr)));
 				if (ret < 0)
 				{
 					printf("fd: %d port: %d ikcp_input error: %d\n", fd, c_port, ret);
-					// KCP::tcp_info info;
-					// KCP::prase_tcp_packet(buffer, len, &info);
-					// if (info.fin) {
-					// 	break;
-					// }
+					KCP::tcp_info info;
+					KCP::prase_tcp_packet(buffer, len, &info);
+					if (info.fin) {
+						std::cout << "recv fin" << std::endl;
+						break;
+					}
 					continue;
 				}
 
@@ -359,6 +360,11 @@ void KcpClient::start_hand_shake() {
 		prase_tcp_packet(data, ret, &info);
 
 		if (info.port_dst == c_port) {
+			if (info.fin) {
+				std::cout << "server fin start break" << std::endl;
+				s_state = TCP_ESTABLISHED;
+				start_waving();
+			}
 			break;
 		}
 	}
