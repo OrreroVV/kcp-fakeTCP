@@ -2,7 +2,9 @@
 
 server_ip="8.138.86.207"
 server_port=6666
-num_clients=26000
+num_clients=500
+start=10000
+
 
 # function cleanup {
 #     echo "Cleaning up..."
@@ -13,9 +15,8 @@ num_clients=26000
 # trap cleanup SIGINT SIGTERM
 
 cd /home/hzh/workspace/kcp-fakeTCP/bin/
-
-for i in $(seq 20000 $num_clients); do
-    sudo ./kcp_qps $i &
+for ((i=$start; i < $start + $num_clients; i++)); do
+    sudo ./kcp_qps $i &  # 在后台执行带参数的命令
 done
 
 wait

@@ -73,6 +73,7 @@ void connectToServer(const std::string& server_ip, uint16_t server_port, uint16_
         return;
 	}
 
+    setNonBlocking(sock);
 
 	std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, client_port, s_port, c_ip, s_ip, file_path));
     clients[sock] = std::move(client);
@@ -118,7 +119,7 @@ int main(int argc, char *argv[])
     auto end_time = std::chrono::high_resolution_clock::now();  
 
     std::chrono::duration<double> duration = end_time - start_time;
-    // std::cout << " connections in " << duration.count() << " seconds" << std::endl;
+    std::cout << " connections in " << duration.count() << " seconds" << std::endl;
 
     // std::cout << "Completed " << num_connections << " connections in " << duration.count() << " seconds" << std::endl;
     
