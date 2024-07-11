@@ -9,6 +9,7 @@
 #include "kcp_socket.h"
 
 #define UDP_MTU 1400
+#define BUFFER_SIZE 1024
 #define IPV4_HEADER_SIZE (sizeof(struct iphdr))
 #define TCP_HEADER_SIZE (sizeof(struct tcphdr))
 
@@ -46,6 +47,8 @@ public:
     void kcp_client_start();
     void send_file();
     void start_waving();
+
+    int nonBlockingSend(const char *data, size_t len);
 
 
     void waving_send_fin();
