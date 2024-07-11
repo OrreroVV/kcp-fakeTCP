@@ -8,11 +8,11 @@
 
 namespace KCP {
 
-#define MAX_EVENTS 1024
+#define MAX_EVENTS 128
 
 class ServerEpoll {
 public:
-    ServerEpoll(const char* server_ip, uint16_t server_port);
+    ServerEpoll(pid_t pid, const char* server_ip, uint16_t server_port);
     ~ServerEpoll();
     int setNonBlocking(int fd);
     int startServer();
@@ -20,8 +20,10 @@ public:
     void create_thread();
     void startEpoll();
     void setListenSock(int sock) { listen_sock = sock;}
+    void setEpollFd(int fd) { epoll_fd = fd;}
 
 private:
+    pid_t m_pid;
     int listen_sock;
     int epoll_fd;
     const char* server_ip;

@@ -50,14 +50,8 @@ int create_socket() {
 		return -1;
 	}
 
-	int optval = 1;
-	// if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval) == -1)) {
-	// 	perror("setsockopt(SO_REUSEADDR)");
-    //     exit(EXIT_FAILURE);
-	// };
-
 	 // 设置SO_REUSEPORT选项
-    optval = 1;
+    int optval = 1;
     if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) == -1) {
         perror("setsockopt(SO_REUSEPORT)");
         exit(EXIT_FAILURE);
@@ -93,11 +87,23 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         } else if (!pid) {
 			int listen_sock = create_socket();
+
+			// int epoll_fd = epoll_create1(0);
+			// if (epoll_fd == -1)
+			// {
+			// 	perror("epoll_create1");
+			// 	close(listen_sock);
+			// 	exit(1);
+			// }
+			// std::cout << "pid: " << getpid() << " " << epoll_fd << std::endl;
+
     		printf("run in server fd: %d\n", listen_sock);
-	        std::unique_ptr<KCP::ServerEpoll> serverEpoll(new KCP::ServerEpoll(s_ip, s_port));
+	        std::unique_ptr<KCP::ServerEpoll> serverEpoll(new KCP::ServerEpoll(getpid(), s_ip, s_port));
             // servers.push_back(std::move(serverEpoll));
             serverEpoll->setListenSock(listen_sock);
+			// serverEpoll->setEpollFd(epoll_fd);
             serverEpoll->startEpoll();
+			return 0;
         }
     }
 
