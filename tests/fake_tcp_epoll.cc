@@ -81,6 +81,9 @@ int main(int argc, char *argv[])
 
 	if (server) {
 		std::unique_ptr<KCP::ServerEpoll> serverEpoll(new KCP::ServerEpoll(s_ip, s_port));
+		if (serverEpoll->startServer() < 0) {
+			return 0;
+		}
 		serverEpoll->startEpoll();
 	}
 	else {

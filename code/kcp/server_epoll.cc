@@ -17,6 +17,8 @@
 
 namespace KCP {
 
+#define RECV_MAX_SIZE 4096
+
 ServerEpoll::ServerEpoll(const char* server_ip, uint16_t server_port) :server_ip(server_ip), server_port(server_port){
     stopFlag.store(true);
 }
@@ -52,8 +54,16 @@ int ServerEpoll::startServer() {
 		return -1;
 	}
 
+    // 重地址
 	int optval = 1;
 	setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+
+    // 设置SO_REUSEPORT选项
+    optval = 1;
+    if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) == -1) {
+        perror("setsockopt(SO_REUSEPORT)");
+        exit(EXIT_FAILURE);
+    }
 
 	struct sockaddr_in local;
 	local.sin_family = AF_INET;
@@ -100,9 +110,6 @@ void ServerEpoll::create_thread() {
 }
 
 void ServerEpoll::startEpoll() {
-    if (startServer() < 0) {
-        return;
-    }
 
     epoll_fd = epoll_create1(0);
     if (epoll_fd == -1)
@@ -174,7 +181,7 @@ void ServerEpoll::startEpoll() {
                 std::shared_ptr<KCP::KcpHandleClient> client = clients[fd];
 
                 if (state & (EPOLLHUP)) {
-                    std::cout << "closing, close fd" << std::endl;
+                    // std::cout << "closing, close fd" << std::endl;
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
                         perror("epoll_ctl: EPOLL_CTL_DEL");
                     }
@@ -191,18 +198,17 @@ void ServerEpoll::startEpoll() {
                 }
 
                 if (state & (EPOLLIN)) {
-                    char recv_buffer[2048] = {};
-                    int ret = read(fd, recv_buffer, 2048);
+                    char recv_buffer[RECV_MAX_SIZE] = {};
+                    int ret = read(fd, recv_buffer, RECV_MAX_SIZE);
                     // std::cout << "read: " << ret << std::endl;
                     std::string filePath;
                     if (ret > 0) {
-                        
                         int kcp_ret = ikcp_input(client->m_kcp, recv_buffer, ret);
                         if (kcp_ret < 0) {
-                            printf("ikcp_input error: %d\n", ret);
+                            // printf("ikcp_input error: %d\n", ret);
                             continue;
                         }
-                        char buffer[2048] {};
+                        char buffer[RECV_MAX_SIZE] {};
                         int len = ikcp_recv(client->m_kcp, buffer, ret);
                         // std::cout << "recv len: " << len << std::endl;
                         if (len > 0) {
@@ -236,11 +242,15 @@ void ServerEpoll::startEpoll() {
                             client->file_sended += ret;
                             // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
                             if (client->file_sended >= client->file_size) {
-                                // printf("File %s received completely\n", client->filePath.c_str());
+                                // printf("File %s received completely, c_port: %d \n", client->filePath.c_str(), client->c_port);
                                 client->file.close();
                                 // flagSended = true;
+                                std::string se;
+                                se = "a";
+                                ikcp_send(client->m_kcp, se.c_str(), se.size());
+                                std::string send_buffer = "send_finish";
+                                ikcp_send(client->m_kcp, send_buffer.c_str(), send_buffer.size());
                             }
-
                         }
                     } else if (!ret) {
                         // std::cout << "closing, close fd" << fd << std::endl;

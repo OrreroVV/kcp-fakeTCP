@@ -19,6 +19,7 @@ public:
     void* updateKcp();
     void create_thread();
     void startEpoll();
+    void setListenSock(int sock) { listen_sock = sock;}
 
 private:
     int listen_sock;

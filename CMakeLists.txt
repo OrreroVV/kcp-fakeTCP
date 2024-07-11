@@ -39,6 +39,10 @@ set(LIB_LIB
 #     tests/test_kcp.cpp
 # )
 
+add_executable(server_fork tests/server_epoll_fork.cc)
+add_dependencies(server_fork hzh)
+target_link_libraries(server_fork ${LIB_LIB})# 设置编译选项
+
 add_executable(test_b tests/b.cpp)
 add_dependencies(test_b hzh)
 target_link_libraries(test_b ${LIB_LIB})# 设置编译选项
@@ -47,10 +51,6 @@ add_executable(test_tcp_server tests/test_tcp_server.cc)
 add_dependencies(test_tcp_server hzh)
 target_link_libraries(test_tcp_server ${LIB_LIB})# 设置编译选项
 
-add_executable(test_tcp_client tests/test_tcp_client.cc)
-add_dependencies(test_tcp_client hzh)
-target_link_libraries(test_tcp_client ${LIB_LIB})# 设置编译选项
-
 add_executable(server_qps tests/fake_tcp_epoll.cc)
 add_dependencies(server_qps hzh)
 target_link_libraries(server_qps ${LIB_LIB})# 设置编译选项
@@ -58,6 +58,11 @@ target_link_libraries(server_qps ${LIB_LIB})# 设置编译选项
 add_executable(kcp_qps tests/test_kcp_qps.cc)
 add_dependencies(kcp_qps hzh)
 target_link_libraries(kcp_qps ${LIB_LIB})# 设置编译选项
+
+# add_executable(test_tcp_client tests/test_tcp_client.cc)
+# add_dependencies(test_tcp_client hzh)
+# target_link_libraries(test_tcp_client ${LIB_LIB})# 设置编译选项
+
 
 # add_executable(test tests/test_kcp_client.cc)
 # add_dependencies(test hzh)

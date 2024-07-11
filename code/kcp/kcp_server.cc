@@ -43,7 +43,7 @@ KcpHandleClient::KcpHandleClient(int fd, uint16_t s_port, const char* s_ip, uint
 
 
 KcpHandleClient::~KcpHandleClient() {
-	// std::cout << "~" << fd << std::endl;
+	std::cout << "~" << fd << std::endl;
 	Close();
 }
 
@@ -169,7 +169,6 @@ void* KcpHandleClient::run_tcp_server() {
 
 	std::cout << "fd: " << fd << "tcp_server end" << std::endl;
 	file.close();
-	Close();
 	return nullptr;
 }
 
@@ -232,6 +231,7 @@ void KcpHandleClient::Close() {
 	}
     ikcp_release(m_kcp);
 	m_kcp = nullptr;
+	std::cout << "close fd: " << fd << std::endl;
 	close(fd);
 }
 
