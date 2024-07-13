@@ -106,7 +106,7 @@ int main() {
     memset(packet, 0, sizeof(packet));
 
     // 构建IP和TCP头部
-    const char *src_ip = "127.0.0.1"; // 替换为本地有效IP地址
+    const char *src_ip = "192.168.61.243"; // 替换为本地有效IP地址
     const char *dst_ip = "8.168.86.207";  // 服务器的公网IP地址
     int src_port = 12345; // 源端口
     int dst_port = 6666;    // 目标端口

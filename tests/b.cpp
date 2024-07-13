@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DATA_SIZE 10000
+#define DATA_SIZE 24
 
 int main() {
     FILE *file;

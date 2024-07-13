@@ -82,6 +82,7 @@ typedef struct __TCP_INFO__ {
 	uint32_t data_len;
 	struct in_addr ip_src;
 	struct in_addr ip_dst;
+    unsigned short iphdr_len;
 } tcp_info;
 
 int StartFakeTcp(const char *ip, short port);

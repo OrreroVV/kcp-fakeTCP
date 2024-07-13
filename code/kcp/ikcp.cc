@@ -764,7 +764,6 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 	}
 
 	if (data == NULL || (int)size < (int)IKCP_OVERHEAD) {
-		printf("yes\n");
 		return -1;
 	}
 	

@@ -2,8 +2,8 @@
 
 server_ip="8.138.86.207"
 server_port=6666
-num_clients=500
-start=10000
+num_clients=5000
+start=20000
 
 
 # function cleanup {
@@ -11,7 +11,6 @@ start=10000
 #     sudo pkill kcp_qps
 #     exit 0
 # }
-
 # trap cleanup SIGINT SIGTERM
 
 cd /home/hzh/workspace/kcp-fakeTCP/bin/

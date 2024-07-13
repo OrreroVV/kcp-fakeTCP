@@ -57,7 +57,6 @@ static short s_port = 6666;
 std::map<int, std::unique_ptr<KCP::KcpClient>>clients;
 std::mutex clientsMutex;
 
-
 void connectToServer(const std::string& server_ip, uint16_t server_port, uint16_t client_port) {
 	// 打开原始套接字
 	int sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -73,7 +72,7 @@ void connectToServer(const std::string& server_ip, uint16_t server_port, uint16_
         return;
 	}
 
-    setNonBlocking(sock);
+    // setNonBlocking(sock);
 
 	std::unique_ptr<KCP::KcpClient> client(new KCP::KcpClient(sock, client_port, s_port, c_ip, s_ip, file_path));
     clients[sock] = std::move(client);
@@ -119,7 +118,7 @@ int main(int argc, char *argv[])
     auto end_time = std::chrono::high_resolution_clock::now();  
 
     std::chrono::duration<double> duration = end_time - start_time;
-    std::cout << " connections in " << duration.count() << " seconds" << std::endl;
+    // std::cout << " connections in " << duration.count() << " seconds" << std::endl;
 
     // std::cout << "Completed " << num_connections << " connections in " << duration.count() << " seconds" << std::endl;
     

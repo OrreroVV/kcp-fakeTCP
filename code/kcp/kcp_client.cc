@@ -1,12 +1,13 @@
 #include "kcp_client.h"
 #include <iostream>
+#include <sys/select.h>
 
 namespace KCP {
 
 int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user)
 {
 	KcpClient *client = static_cast<KcpClient*>(user);
-	// std::cout <<"client fd: " << client->fd << std::endl;
+	// std::cout <<"client fd: " << client->fd << "cb_len: " << len << std::endl;
 
 	int sended = 0;
 	while (sended < len)
@@ -106,7 +107,7 @@ KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip,
  	:fd(fd), c_port(c_port), s_port(s_port), c_ip(c_ip), s_ip(s_ip), file_path(file_path){
 
 	s_state = TCP_CLOSED;
-
+	
 	stopFlag.store(false);
 	finishSend.store(false);
 
@@ -117,7 +118,9 @@ KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip,
 	
 	std::srand(static_cast<unsigned>(std::time(0)));
 	seq = rand();
-	
+
+	read_file = false;
+	finish_file.store(false);
 	m_kcp = ikcp_create(c_port, this);
 	assert(m_kcp); 
 }
@@ -204,21 +207,127 @@ void KcpClient::build_ip_tcp_header(char* data, const char* buffer, size_t data_
 
 void KcpClient::run_tcp_client() {
 	// std::cout <<"start run_tcp_client" << std::endl;
-	ssize_t len = 0;
 	char buffer[BUFFER_SIZE + 10] = {0};
+	ssize_t len = 0;
+	uint32_t sended = 0;
+	uint32_t file_size = 0;
+
 	while (!stopFlag.load()) {
-		ikcp_update(m_kcp, KCP::iclock());
 		struct sockaddr_in src;
 		socklen_t src_len = sizeof(struct sockaddr_in);
 		setAddr(s_ip, s_port, &src);
-		len = recvfrom(fd, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&src, &src_len);
 
-		if (len > 0) {
+		fd_set read_fds;
+		FD_ZERO(&read_fds);
+		FD_SET(fd, &read_fds);
+
+		// Timeout value
+		struct timeval tv;
+		tv.tv_sec = 5;
+		tv.tv_usec = 0;
+
+		fd_set temp_fds = read_fds;
+
+		int activity = select(fd + 1, &temp_fds, nullptr, nullptr, &tv);
+
+		if (activity < 0 && errno != EINTR) {
+			perror("select error");
+		}
+
+		if (FD_ISSET(fd, &temp_fds)) {
+			
+			len = recvfrom(fd, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&src, &src_len);
+			// Now process the packet
+
 			KCP::tcp_info info;
 			KCP::prase_tcp_packet(buffer, len, &info);
 			if (info.port_dst != c_port) {
-				continue;
+				continue;	
 			}
+			// std::cout << "send queue: " << ikcp_waitsnd(m_kcp) << std::endl;
+			// std::cout << "len: " << len << std::endl;
+			server_ack_seq.store(info.seq + len - (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr)));
+			// // std::cout <<"client recv len: " << len << std::endl;
+			// ikcp_send(m_kcp, "", 0);
+			
+
+			size_t data_size = len - (sizeof(struct iphdr) + sizeof(struct tcphdr));
+			if (data_size > 0) {
+				
+				// // 如果不是ack包，发送确认收到
+				// char send_buffer[41] = {};
+				// build_ip_tcp_header(send_buffer, "", 0, 1, 1, 0, 0);
+				// ::sendto(fd, send_buffer, IP_TCP_HEADER_SIZE, 0, (sockaddr*)&src, src_len);
+				int ret;
+				// std::cout << "ikcp_input size: " << data_size << std::endl;
+				{
+					std::lock_guard<std::mutex> lock(kcp_mutex);
+					ret = ikcp_input(m_kcp, buffer + sizeof(struct iphdr) + sizeof(struct tcphdr), len - (sizeof(struct iphdr) + sizeof(struct tcphdr)));
+				}
+				// std::cout << "ikcp_input ret: " << ret << std::endl;
+				if (ret < 0) {
+					// printf("fd: %d port: %d ikcp_input error: %d\n", fd, c_port, ret);
+					KCP::tcp_info info;
+					KCP::prase_tcp_packet(buffer, len, &info);
+					if (info.fin) {
+						std::cout << "recv fin" << std::endl;
+						break;
+					}
+					continue;
+				}
+				/* recv file */
+
+
+
+				ret = 1;
+				while (ret > 0) {
+					char recv_buffer[BUFFER_SIZE + 10] = {};
+					{
+						std::lock_guard<std::mutex> lock(kcp_mutex);
+						ret = ikcp_recv(m_kcp, recv_buffer, data_size);
+					}
+					if (ret > 0) {
+
+						std::cout << "ret: " << ret << "recv_buffer: " << recv_buffer << std::endl;
+						if (strcmp(recv_buffer, "send_finish") == 0) {
+							finishSend.store(true);
+							// std::cout << "finish send" << std::endl;
+						}
+						continue;
+
+						if (!read_file) {
+
+							memcpy(&file_size, recv_buffer, sizeof(uint32_t));
+							file_size = ntohl(file_size);
+							read_file = true;	
+
+							if (ret > 8 + 128) {
+								sended += ret - (8 + 128);
+								// 写入文件操作
+							}
+						} else {
+							sended += ret;
+							if (sended >= file_size) {
+								finish_file.store(true);
+							}
+						}
+					}
+
+				}
+			}
+		}
+
+
+		continue;
+		if (len > 0) {
+			std::cout << "recvfrom len: " << len << std::endl;
+			KCP::tcp_info info;
+			KCP::prase_tcp_packet(buffer, len, &info);
+			if (info.port_dst != c_port) {
+				continue;	
+			}
+			
+			// std::cout << "len: " << len << std::endl;
 			server_ack_seq.store(info.seq + len - (ssize_t)(sizeof(struct iphdr) + sizeof(struct tcphdr)));
 			// // std::cout <<"client recv len: " << len << std::endl;
 			// ikcp_send(m_kcp, "", 0);
@@ -232,9 +341,9 @@ void KcpClient::run_tcp_client() {
 				// build_ip_tcp_header(send_buffer, "", 0, 1, 1, 0, 0);
 				// ::sendto(fd, send_buffer, IP_TCP_HEADER_SIZE, 0, (sockaddr*)&src, src_len);
 
-
+				// std::cout << "ikcp_input size: " << len - (sizeof(struct iphdr) + sizeof(struct tcphdr)) << std::endl;
 				int ret = ikcp_input(m_kcp, buffer + sizeof(struct iphdr) + sizeof(struct tcphdr), len - (sizeof(struct iphdr) + sizeof(struct tcphdr)));
-				// std::cout << "ret: " << ret << std::endl;
+				// std::cout << "ikcp_input ret: " << ret << std::endl;
 				if (ret < 0)
 				{
 					printf("fd: %d port: %d ikcp_input error: %d\n", fd, c_port, ret);
@@ -245,19 +354,6 @@ void KcpClient::run_tcp_client() {
 						break;
 					}
 					continue;
-				}
-
-				char recv_buffer[BUFFER_SIZE + 10] = {0};
-
-
-				ret = ikcp_recv(m_kcp, recv_buffer, len);
-				if (ret > 0)
-				{
-					printf("ikcp_recv ret = %d,buf=%s\n", ret, recv_buffer);
-					// stopFlag.store(true);
-					if (!strcmp(recv_buffer, "send_finish")) {
-						finishSend.store(true);
-					}
 				}
 			}
 		} else if (!len) {
@@ -272,6 +368,8 @@ void KcpClient::run_tcp_client() {
 				break;
 			}
 		}
+
+
 		KCP::isleep(1);
 	}
 }
@@ -285,8 +383,12 @@ void* KcpClient::client_loop()
 		if (++cnt % 1000 == 0) {
 			// std::cout << "fd: " << fd << "port: " << c_port << "looping" << std::endl;
 		}
-		ikcp_update(m_kcp, KCP::iclock());
-		KCP::isleep(10);
+		{
+			std::lock_guard<std::mutex> lock(kcp_mutex);
+			ikcp_update(m_kcp, KCP::iclock());
+			// std::cout << ikcp_waitsnd(m_kcp) << "\n";
+		}
+		KCP::isleep(1);
 	}
 
 	return nullptr;
@@ -296,17 +398,17 @@ void KcpClient::kcp_client_start()
 {
 	// char buf[65535];
 	ikcp_setoutput(m_kcp, tcp_client_cb);
-
-	int sndwnd = 128, rcvwnd = 128;
+	// ikcp_setmtu(m_kcp, 1400);
+	int sndwnd = 256, rcvwnd = 256;
 	ikcp_wndsize(m_kcp, sndwnd, rcvwnd);
 	int mod = 0;
 	switch (mod)
 	{
 	case 0:
-		ikcp_nodelay(m_kcp, 0, 10, 0, 0);
-	case 1:
+		ikcp_nodelay(m_kcp, 1, 10, 0, 0);
 		break;
-		ikcp_nodelay(m_kcp, 0, 10, 0, 1);
+	case 1:
+		ikcp_nodelay(m_kcp, 1, 10, 2, 1);
 		break;
 	case 2:
 		// 启动快速模式
@@ -325,15 +427,16 @@ void KcpClient::kcp_client_start()
 	}
 
 	stopFlag.store(false);
-	// kcp_loop_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::client_loop, this));
-	// kcp_loop_thread->detach();
+	kcp_loop_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::client_loop, this));
+	kcp_loop_thread->detach();
 
 	kcp_client_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::run_tcp_client, this));
 	kcp_client_thread->detach();
 }
 
 void KcpClient::send_file() {
-	std::cout <<"start send file" << std::endl;
+	auto start_time = std::chrono::high_resolution_clock::now();
+	// std::cout <<"start send file" << std::endl;
 	assert(s_state == TCP_ESTABLISHED);
 	kcp_client_start();
 
@@ -356,7 +459,11 @@ void KcpClient::send_file() {
 	size_t file_size_n = htonl(file_size);
 	memcpy(temp, &file_size_n, sizeof(uint32_t));
 	memcpy(temp + sizeof(uint32_t), &filename[0], filename.size());
-	ikcp_send(m_kcp, temp, sizeof(temp));
+
+	{
+		std::lock_guard<std::mutex> lock(kcp_mutex);
+		ikcp_send(m_kcp, temp, sizeof(temp));
+	}
 
 	char buf[BUFFER_SIZE + 10];
 	size_t totalBytesRead = 0;
@@ -365,7 +472,11 @@ void KcpClient::send_file() {
 		file.read(buf, s);
 		std::streamsize bytesRead = file.gcount();
 		totalBytesRead += bytesRead;
-		ikcp_send(m_kcp, buf, s);
+		{
+			std::lock_guard<std::mutex> lock(kcp_mutex);
+			ikcp_send(m_kcp, buf, s);
+			// std::cout << "ikcp_send: " << temp << "\n";
+		}
 		// std::cout <<"send: " << s << "\n";
 	}
 	file.close();
@@ -373,18 +484,38 @@ void KcpClient::send_file() {
 	int XX = 0;
 	while (!finishSend.load()) {
 		KCP::isleep(5);
-		if (++XX % 1000 == 0) {
+		if (++XX >= 10000) {
 			std::cout << "loop load" << std::endl;
+			break;
 		}
 	}
 
+
+
+	int XXX = 0;
 	while (ikcp_waitsnd(m_kcp) > 0) {
 		KCP::isleep(5);
-		std::cout << "loop ikcp waitsnd" << std::endl;
+		if (++XXX >= 10000) {
+			std::cout << "loop ikcp waitsnd" << std::endl;
+			return;
+		}
 	}
+
+	// while (!finish_file.load()) {
+	// 	KCP::isleep(1);
+	// 	if (++XXX >= 10000) {
+	// 		std::cout << "loop finish recv file" << std::endl;
+	// 		return;
+	// 	}
+	// }
+
 	KCP::isleep(5);
+	auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> duration = end_time - start_time;
+    std::cout << " connections in " << duration.count() << " seconds\n";
+
 	stopFlag.store(true);
-	std::cout << "end send file" << std::endl;
+	// std::cout << "end send file" << std::endl;
 	
 	auto start = std::chrono::high_resolution_clock::now();
 	auto end = start + std::chrono::seconds(3);
@@ -410,14 +541,16 @@ void KcpClient::start_hand_shake() {
 	int ret = nonBlockingSend(data, IP_TCP_HEADER_SIZE);
 	// int ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*) &dest, sizeof(sockaddr));
 	// std::cout <<"ret: " << ret << std::endl;
-	if (ret < 0) {
-        perror("sendto error");
+	if (ret <= 0) {
+        perror("syn sendto error");
+		return;
     }
 
 	struct sockaddr_in recv_dest;
 	setAddr(s_ip, s_port, &recv_dest);
 	socklen_t addrlen = sizeof(sockaddr_in);
 	tcp_info info;
+	int cnt_temp1 = 0;
 	while (true) {
 		ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&recv_dest, &addrlen);
 		if (ret < 0) {
@@ -435,6 +568,9 @@ void KcpClient::start_hand_shake() {
 			}
 			break;
 		} else {
+			if (++cnt_temp1 >= 10000) {
+				return;
+			}
 		}
 		KCP::isleep(1);
 	}
@@ -449,6 +585,10 @@ void KcpClient::start_hand_shake() {
 
 	build_ip_tcp_header(data, "", 0, 1, 0, 0, 0);
 	ret = nonBlockingSend(data, IP_TCP_HEADER_SIZE);
+	if (ret <= 0) {
+		perror("ack syn error");
+		return;
+	}
 	// ret = sendto(fd, data, IP_TCP_HEADER_SIZE, 0, (sockaddr*)&dest, addrlen);
 
 	s_state = TCP_ESTABLISHED;

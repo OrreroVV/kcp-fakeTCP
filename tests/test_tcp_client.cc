@@ -60,14 +60,14 @@ void sendFile(const char* filepath, const char* filename) {
     send(sock, header, 8 + 128, 0);
 
 
-    // // 发送文件内容
-    // char buffer[BUFFER_SIZE];
-    // while (!file.eof()) {
-    //     file.read(buffer, BUFFER_SIZE);
-    //     std::streamsize bytesRead = file.gcount();
-    //     send(sock, buffer, bytesRead, 0);
-    //     std::cout << sock << " send: " << bytesRead << std::endl;
-    // }
+    // 发送文件内容
+    char buffer[BUFFER_SIZE];
+    while (!file.eof()) {
+        file.read(buffer, BUFFER_SIZE);
+        std::streamsize bytesRead = file.gcount();
+        send(sock, buffer, bytesRead, 0);
+        std::cout << sock << " send: " << bytesRead << std::endl;
+    }
     
 
     // 关闭文件和socket
@@ -92,7 +92,7 @@ int main() {
     const char* filepath = "/home/hzh/workspace/kcp-fakeTCP/logs/data.txt";
     const char* filename = "data.txt"; // 该文件名会发送给服务器，可以与实际文件名不同
     // 开始计时
-    int num = 1;
+    // int num = 1;
     auto start = std::chrono::high_resolution_clock::now();
     sendFile(filepath, filename);
     // testConcurrency(filepath, filename, num);

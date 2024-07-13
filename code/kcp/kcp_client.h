@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <atomic>
+#include <mutex>
 #include "ikcp.h"
 #include "kcp_socket.h"
 
@@ -66,6 +67,8 @@ public:
     const char* s_ip;
     std::string file_path;
     int s_state;
+    bool read_file;
+    std::atomic<bool> finish_file;
     ikcpcb* m_kcp;
 
     uint32_t seq;
@@ -75,6 +78,7 @@ public:
     std::atomic<uint32_t> CLIENT_SUM_SEND;
     //uint32_t CLIENT_SUM_SEND;
 
+    std::mutex kcp_mutex;
     std::atomic<bool> stopFlag;
     std::atomic<bool> finishSend;
     std::unique_ptr<std::thread> kcp_loop_thread;
