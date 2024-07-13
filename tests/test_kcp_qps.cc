@@ -31,7 +31,6 @@
 #include <vector>
 #include <mutex>
 
-#define UDP_MTU 1400
 
 const int MAX_EVENTS = 10;
 

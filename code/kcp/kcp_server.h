@@ -9,8 +9,6 @@
 #include "kcp_socket.h"
 
 
-#define UDP_MTU 1024 + 48
-
 namespace KCP {
 
 int tcp_server_send_cb(const char *buffer, int len, ikcpcb *kcp, void *user);

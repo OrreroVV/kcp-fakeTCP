@@ -64,6 +64,8 @@ namespace KCP {
 // 	ikcpcb* m_kcp;
 // } cb_params;
 
+#define UDP_MTU 1024 + 48
+
 typedef struct __TCP_INFO__ {
     uint16_t proto;
 	uint16_t syn:1;

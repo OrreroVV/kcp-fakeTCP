@@ -31,7 +31,6 @@
 #include <fcntl.h>
 #include <vector>
 
-#define UDP_MTU 1400
 
 int setNonBlocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);

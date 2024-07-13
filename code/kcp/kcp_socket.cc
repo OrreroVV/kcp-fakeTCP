@@ -3,7 +3,6 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 
-#define UDP_MTU 1460
 
 namespace KCP {
 

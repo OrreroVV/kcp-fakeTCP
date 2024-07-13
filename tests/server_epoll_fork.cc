@@ -31,7 +31,6 @@
 #include <fcntl.h>
 #include <vector>
 
-#define UDP_MTU 1400
 #define FORK_MAX_NUMS 4
 
 static const char *s_ip = "8.138.86.207";

@@ -9,7 +9,7 @@
 #include "ikcp.h"
 #include "kcp_socket.h"
 
-#define UDP_MTU 1400
+#define UDP_MTU 1024 + 48
 #define BUFFER_SIZE 1024
 #define IPV4_HEADER_SIZE (sizeof(struct iphdr))
 #define TCP_HEADER_SIZE (sizeof(struct tcphdr))
