@@ -179,13 +179,13 @@ ikcpcb* KcpHandleClient::start_kcp_server() {
 
 	int sndwnd = 128, rcvwnd = 128;
     ikcp_wndsize(m_kcp, sndwnd, rcvwnd);
-	int mod = 0;
+	int mod = 1;
     switch (mod) {
         case 0:
             ikcp_nodelay(m_kcp, 0, 40, 0, 0);
-        case 1:
             break;
-            ikcp_nodelay(m_kcp, 0, 10, 0, 1);
+        case 1:
+            ikcp_nodelay(m_kcp, 1, 10, 2, 1);
             break;
         case 2:
             // 启动快速模式

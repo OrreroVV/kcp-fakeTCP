@@ -84,16 +84,68 @@ int ServerEpoll::startServer() {
 }
 
 void* ServerEpoll::updateKcp() {
+    
+    std::atomic<int>cnt = { 0 };
     while (!stopFlag.load()) {
         {
             std::lock_guard<std::mutex> lock(update_mutex);
             for (auto it = clients.begin(); it != clients.end();) {
                 std::shared_ptr<KCP::KcpHandleClient> client = it->second;
-                if (client->stopFlag.load()) {
-                    it = clients.erase(it);
-                    continue;
-                }
+                // if (client->stopFlag.load()) {
+                //     it = clients.erase(it);
+                //     continue;
+                // }
                 ikcp_update(client->m_kcp, KCP::iclock());
+                char buffer[RECV_MAX_SIZE + 10] {};
+                int len = ikcp_recv(client->m_kcp, buffer, RECV_MAX_SIZE);
+                // std::cout << "recv len: " << len << std::endl;
+                if (len > 0) {
+                    std::cout << "len: " << len << std::endl;
+                    // data
+                    if (!client->read_file) {
+                        assert(len >= 128 + 8);
+                        client->read_file = true;
+
+                        memcpy(&client->file_size, buffer, sizeof(uint32_t));
+                        client->file_size = ntohl(client->file_size);
+                        printf("File size: %u\n", client->file_size);
+
+                        char file_name[128 + 10] = { 0 };
+                        memcpy(file_name, buffer + sizeof(uint32_t), 128);
+                        
+                        
+                        // printf("File name: %s\n", file_name);
+                        client->filePath = client->prefix_path;
+                        client->filePath += std::to_string(m_pid);
+                        client->filePath += "_";
+                        client->filePath += std::to_string(cnt.load());
+                        client->filePath += ".txt";
+                        cnt.fetch_add(1);
+                        
+                        // file_name = random_24();
+                        // filePath = prefix_path + file_name;
+                        client->file.open(client->filePath, std::ios::out | std::ios::binary);
+                        
+                        if (len > 8 + 128) {
+                            client->file.write(buffer + 8 + 128, len - (8 + 128));
+                            client->file_sended += len - (8 + 128);
+                            // std::cout << "recv size: " << client->file_sended << std::endl;
+                        }
+                        continue;
+                    }
+                    client->file.write(buffer, len);
+                    client->file_sended += len;
+                    // std::cout << "recv size: " << client->file_sended << std::endl;
+                    // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
+                    if (client->file_sended >= client->file_size) {
+                        printf("File %s received completely, c_port: %d \n", client->filePath.c_str(), client->c_port);
+                        client->file.close();
+                        // flagSended = true;
+                        std::string send_buffer = "send_finish";
+                        ikcp_send(client->m_kcp, send_buffer.c_str(), send_buffer.size());
+                    }
+                }
+
 
                 ++it;
             }
@@ -130,8 +182,6 @@ void ServerEpoll::startEpoll() {
     }
 
     create_thread();
-
-    std::atomic<int>cnt = { 0 };
     struct epoll_event events[MAX_EVENTS];
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
@@ -208,55 +258,55 @@ void ServerEpoll::startEpoll() {
                             // printf("ikcp_input error: %d\n", ret);
                             continue;
                         }
-                        char buffer[RECV_MAX_SIZE + 10] {};
-                        int len = ikcp_recv(client->m_kcp, buffer, ret);
-                        std::cout << "len: " << len << std::endl;
-                        // std::cout << "recv len: " << len << std::endl;
-                        if (len > 0) {
-                            // data
-                            if (!client->read_file) {
-                                assert(len >= 128 + 8);
-                                client->read_file = true;
+                        // char buffer[RECV_MAX_SIZE + 10] {};
+                        // int len = ikcp_recv(client->m_kcp, buffer, ret);
+                        // std::cout << "len: " << len << std::endl;
+                        // // std::cout << "recv len: " << len << std::endl;
+                        // if (len > 0) {
+                        //     // data
+                        //     if (!client->read_file) {
+                        //         assert(len >= 128 + 8);
+                        //         client->read_file = true;
 
-                                memcpy(&client->file_size, buffer, sizeof(uint32_t));
-                                client->file_size = ntohl(client->file_size);
-                                printf("File size: %u\n", client->file_size);
+                        //         memcpy(&client->file_size, buffer, sizeof(uint32_t));
+                        //         client->file_size = ntohl(client->file_size);
+                        //         printf("File size: %u\n", client->file_size);
 
-                                char file_name[128 + 10] = { 0 };
-                                memcpy(file_name, buffer + sizeof(uint32_t), 128);
+                        //         char file_name[128 + 10] = { 0 };
+                        //         memcpy(file_name, buffer + sizeof(uint32_t), 128);
                                 
                                 
-                                // printf("File name: %s\n", file_name);
-                                client->filePath = client->prefix_path;
-                                client->filePath += std::to_string(m_pid);
-                                client->filePath += "_";
-                                client->filePath += std::to_string(cnt.load());
-                                client->filePath += ".txt";
-                                cnt.fetch_add(1);
+                        //         // printf("File name: %s\n", file_name);
+                        //         client->filePath = client->prefix_path;
+                        //         client->filePath += std::to_string(m_pid);
+                        //         client->filePath += "_";
+                        //         client->filePath += std::to_string(cnt.load());
+                        //         client->filePath += ".txt";
+                        //         cnt.fetch_add(1);
                                 
-                                // file_name = random_24();
-                                // filePath = prefix_path + file_name;
-                                client->file.open(client->filePath, std::ios::out | std::ios::binary);
+                        //         // file_name = random_24();
+                        //         // filePath = prefix_path + file_name;
+                        //         client->file.open(client->filePath, std::ios::out | std::ios::binary);
                                 
-                                if (len > 8 + 128) {
-                                    client->file.write(buffer + 8 + 128, len - (8 + 128));
-                                    client->file_sended += len - (8 + 128);
-                                    // std::cout << "recv size: " << client->file_sended << std::endl;
-                                }
-                                continue;
-                            }
-                            client->file.write(buffer, len);
-                            client->file_sended += len;
-                            // std::cout << "recv size: " << client->file_sended << std::endl;
-                            // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
-                            if (client->file_sended >= client->file_size) {
-                                printf("File %s received completely, c_port: %d \n", client->filePath.c_str(), client->c_port);
-                                client->file.close();
-                                // flagSended = true;
-                                std::string send_buffer = "send_finish";
-                                ikcp_send(client->m_kcp, send_buffer.c_str(), send_buffer.size());
-                            }
-                        }
+                        //         if (len > 8 + 128) {
+                        //             client->file.write(buffer + 8 + 128, len - (8 + 128));
+                        //             client->file_sended += len - (8 + 128);
+                        //             // std::cout << "recv size: " << client->file_sended << std::endl;
+                        //         }
+                        //         continue;
+                        //     }
+                        //     client->file.write(buffer, len);
+                        //     client->file_sended += len;
+                        //     // std::cout << "recv size: " << client->file_sended << std::endl;
+                        //     // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
+                        //     if (client->file_sended >= client->file_size) {
+                        //         printf("File %s received completely, c_port: %d \n", client->filePath.c_str(), client->c_port);
+                        //         client->file.close();
+                        //         // flagSended = true;
+                        //         std::string send_buffer = "send_finish";
+                        //         ikcp_send(client->m_kcp, send_buffer.c_str(), send_buffer.size());
+                        //     }
+                        // }
                     } else if (!ret) {
                         // std::cout << "closing, close fd" << fd << std::endl;
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
