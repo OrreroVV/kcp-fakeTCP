@@ -9,7 +9,7 @@
 #include "kcp_socket.h"
 
 
-#define UDP_MTU 1400
+#define UDP_MTU 1024 + 48
 
 namespace KCP {
 

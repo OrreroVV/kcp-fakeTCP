@@ -8,15 +8,17 @@ int tcp_server_send_cb(const char *buffer, int len, ikcpcb *kcp, void *user) {
 
     int sended = 0;
 	// std::cout << "server send cb len: " << len << std::endl;
-	sockaddr_in client_addr;
-	setAddr(client->c_ip, client->c_port, &client_addr);
-	socklen_t addrlen = sizeof(client_addr);
+	// sockaddr_in client_addr;
+	// setAddr(client->c_ip, client->c_port, &client_addr);
+	// socklen_t addrlen = sizeof(client_addr);
 
     while (sended < len) {
         size_t s = (len - sended);
         if(s > UDP_MTU) s = UDP_MTU;
-        ssize_t ret = sendto(client->fd, buffer + sended, s, 0, (sockaddr*)&client_addr, addrlen);
-		// std::cout << "server send to: " << ret << std::endl;
+		// std::cout << "s: " << s << std::endl;
+        // ssize_t ret = sendto(client->fd, buffer + sended, s, 0, (sockaddr*)&client_addr, addrlen);
+		ssize_t ret = send(client->fd, buffer + sended, s, 0);
+		std::cout << "server send to: " << ret << std::endl;
         if(ret < 0){
             return -1;
         }
@@ -43,7 +45,7 @@ KcpHandleClient::KcpHandleClient(int fd, uint16_t s_port, const char* s_ip, uint
 
 
 KcpHandleClient::~KcpHandleClient() {
-	std::cout << "~" << fd << std::endl;
+	std::cout << "~" << fd << "\n";
 	Close();
 }
 
@@ -118,6 +120,8 @@ void* KcpHandleClient::run_tcp_server() {
 
 			// 发送8 + 128字节确认文件大小，文件名
 			char recv_buffer[2048] = { 0 };
+
+			
 			ret = ikcp_recv(m_kcp, recv_buffer, len);
 			
 			std::cout << "server ikcp_recv ret: " << ret << std::endl;
@@ -177,12 +181,12 @@ ikcpcb* KcpHandleClient::start_kcp_server() {
 	assert(m_kcp && fd);
 	ikcp_setoutput(m_kcp, tcp_server_send_cb);
 
-	int sndwnd = 128, rcvwnd = 128;
+	int sndwnd = 256, rcvwnd = 256;
     ikcp_wndsize(m_kcp, sndwnd, rcvwnd);
-	int mod = 1;
+	int mod = 0;
     switch (mod) {
         case 0:
-            ikcp_nodelay(m_kcp, 0, 40, 0, 0);
+            ikcp_nodelay(m_kcp, 1, 10, 0, 0);
             break;
         case 1:
             ikcp_nodelay(m_kcp, 1, 10, 2, 1);
@@ -203,12 +207,11 @@ ikcpcb* KcpHandleClient::start_kcp_server() {
             break;
     }
 
-
     stopFlag.store(false);
 	return m_kcp;
 	// tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server, this));
 	// tcp_server_thread = std::unique_ptr<std::thread>(new std::thread(&KcpHandleClient::run_tcp_server_loop, this));
-	// tcp_server_thread->detach(); 
+	// tcp_server_thread->detach();
 }
 
 std::string KcpHandleClient::random_24() {
@@ -231,7 +234,7 @@ void KcpHandleClient::Close() {
 	}
     ikcp_release(m_kcp);
 	m_kcp = nullptr;
-	std::cout << "close fd: " << fd << std::endl;
+	// std::cout << "close fd: " << fd << std::endl;
 	close(fd);
 }
 

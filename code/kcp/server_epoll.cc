@@ -17,7 +17,8 @@
 
 namespace KCP {
 
-#define RECV_MAX_SIZE 1024 + 24
+#define RECV_MAX_SIZE 2048
+#define SEND_MAX_SIZE 1024
 
 ServerEpoll::ServerEpoll(pid_t pid, const char* server_ip, uint16_t server_port) : m_pid(pid), server_ip(server_ip), server_port(server_port){
     stopFlag.store(true);
@@ -91,17 +92,32 @@ void* ServerEpoll::updateKcp() {
             std::lock_guard<std::mutex> lock(update_mutex);
             for (auto it = clients.begin(); it != clients.end();) {
                 std::shared_ptr<KCP::KcpHandleClient> client = it->second;
-                // if (client->stopFlag.load()) {
-                //     it = clients.erase(it);
-                //     continue;
-                // }
-                ikcp_update(client->m_kcp, KCP::iclock());
+                if (client->stopFlag.load()) {
+                    it = clients.erase(it);
+                    continue;
+                }
+                // std::cout << client->fd << " update ICKP update" << " waitsend: " << ikcp_waitsnd(client->m_kcp) << std::endl;
+                {
+                    std::lock_guard<std::mutex> lock(kcp_mutex);
+                    ikcp_update(client->m_kcp, KCP::iclock());
+                }
+
+    
+
+                ++it;
+                continue;
+
+
                 char buffer[RECV_MAX_SIZE + 10] {};
-                int len = ikcp_recv(client->m_kcp, buffer, RECV_MAX_SIZE);
+                int len;
+                {
+                    std::lock_guard<std::mutex> lock(kcp_mutex);
+                    len = ikcp_recv(client->m_kcp, buffer, RECV_MAX_SIZE);
+                }
                 // std::cout << "recv len: " << len << std::endl;
                 if (len > 0) {
-                    std::cout << "len: " << len << std::endl;
-                    // data
+                    std::cout << "recv len: " << len << std::endl;
+                    
                     if (!client->read_file) {
                         assert(len >= 128 + 8);
                         client->read_file = true;
@@ -141,13 +157,14 @@ void* ServerEpoll::updateKcp() {
                         printf("File %s received completely, c_port: %d \n", client->filePath.c_str(), client->c_port);
                         client->file.close();
                         // flagSended = true;
-                        std::string send_buffer = "send_finish";
-                        ikcp_send(client->m_kcp, send_buffer.c_str(), send_buffer.size());
+                        std::string msg = "send_finish";
+                        
+                        std::lock_guard<std::mutex> lock(kcp_mutex);
+                        ikcp_send(client->m_kcp, msg.c_str(), msg.size());
                     }
                 }
 
 
-                ++it;
             }
         }
         KCP::isleep(10);
@@ -159,6 +176,13 @@ void ServerEpoll::create_thread() {
     stopFlag.store(false);
     update_thread = std::unique_ptr<std::thread>(new std::thread(&ServerEpoll::updateKcp, this));
     update_thread->detach();
+
+    // update_thread = std::unique_ptr<std::thread>(new std::thread(&ServerEpoll::updateKcp, this));
+    // update_thread->detach();
+}
+
+void ServerEpoll::send_file() {
+    
 }
 
 void ServerEpoll::startEpoll() {
@@ -172,7 +196,7 @@ void ServerEpoll::startEpoll() {
     }
 
     struct epoll_event ev;
-    ev.events = EPOLLIN;
+    ev.events = EPOLLIN | EPOLLET;
     ev.data.fd = listen_sock;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_sock, &ev) == -1) {
         perror("epoll_ctl: listen_sock");
@@ -182,6 +206,11 @@ void ServerEpoll::startEpoll() {
     }
 
     create_thread();
+
+    std::atomic<int>cnt = { 0 };
+
+
+
     struct epoll_event events[MAX_EVENTS];
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
@@ -196,7 +225,7 @@ void ServerEpoll::startEpoll() {
                 struct sockaddr_in peer;
                 socklen_t len = sizeof(peer);
                 int fd = accept(listen_sock, (struct sockaddr *)&peer, &len);
-                std::cout << "New connection recv pid: " << m_pid << std::endl;
+                // std::cout << "New connection recv pid: " << m_pid << "\n";
                 if (fd == -1) {
                     perror("accept");
                     continue;
@@ -226,12 +255,58 @@ void ServerEpoll::startEpoll() {
 
                 std::lock_guard<std::mutex> lock(update_mutex);
                 clients[fd] = std::move(handleClient);
+
+
+                // std::string file_path = "/home/hzh/workspace/work/logs/data_server.txt";
+
+            	// // 打开文件并发送内容
+	            // std::string filename = file_path.substr(file_path.find_last_of("/") + 1);
+
+                // std::ifstream file(file_path, std::ios::in | std::ios::binary);
+                // if (!file) {
+                //     perror("send file");
+                //     continue;
+                // }
+
+                // char temp[8 + 128]{};
+                // // 获取文件大小
+                // file.seekg(0, std::ios::end);
+                // uint32_t file_size = file.tellg();
+                // file.seekg(0, std::ios::beg);
+                // // std::cout << "file_size: " << file_size << std::endl;
+                // size_t file_size_n = htonl(file_size);
+                
+
+                // memcpy(temp, &file_size_n, sizeof(uint32_t));
+                // memcpy(temp + sizeof(uint32_t), &filename[0], filename.size());
+                // {
+                //     std::lock_guard<std::mutex> lock(kcp_mutex);
+                //     ikcp_send(clients[fd]->m_kcp, temp, sizeof(temp));
+                // }
+
+                // char buf[SEND_MAX_SIZE + 10];
+                // size_t totalBytesRead = 0;
+                // while (totalBytesRead < file_size) {
+                //     size_t s = std::min(file_size - totalBytesRead, (size_t)SEND_MAX_SIZE);
+                //     file.read(buf, s);
+                //     std::streamsize bytesRead = file.gcount();
+                //     totalBytesRead += bytesRead;
+                //     {
+                //         std::lock_guard<std::mutex> lock(kcp_mutex);
+                //         int temp = ikcp_send(clients[fd]->m_kcp, buf, s);
+                //     }
+                //     // std::cout <<"send: " << s << "\n";
+                // }
+                // file.close();
+
+                
             } else {
                 uint32_t state = events[i].events;
                 int fd = events[i].data.fd;
                 std::shared_ptr<KCP::KcpHandleClient> client = clients[fd];
 
                 if (state & (EPOLLHUP)) {
+                    
                     // std::cout << "closing, close fd" << std::endl;
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
                         perror("epoll_ctl: EPOLL_CTL_DEL");
@@ -248,81 +323,100 @@ void ServerEpoll::startEpoll() {
                 }
 
                 if (state & (EPOLLIN)) {
-                    char recv_buffer[RECV_MAX_SIZE + 10] = {};
-                    int ret = read(fd, recv_buffer, RECV_MAX_SIZE);
-                    std::cout << "pid: " << m_pid << "read: " << ret << std::endl;
-                    std::string filePath;
-                    if (ret > 0) {
-                        int kcp_ret = ikcp_input(client->m_kcp, recv_buffer, ret);
-                        if (kcp_ret < 0) {
-                            // printf("ikcp_input error: %d\n", ret);
-                            continue;
-                        }
-                        // char buffer[RECV_MAX_SIZE + 10] {};
-                        // int len = ikcp_recv(client->m_kcp, buffer, ret);
-                        // std::cout << "len: " << len << std::endl;
-                        // // std::cout << "recv len: " << len << std::endl;
-                        // if (len > 0) {
-                        //     // data
-                        //     if (!client->read_file) {
-                        //         assert(len >= 128 + 8);
-                        //         client->read_file = true;
+                    while (true) {
+                        char recv_buffer[RECV_MAX_SIZE + 10] = {};
+                        int ret = read(fd, recv_buffer, RECV_MAX_SIZE);
+                        std::cout << "pid: " << m_pid << "read: " << ret << std::endl;
+                        std::string filePath;
+                        if (ret > 0) {
+                            int kcp_ret;
+                            {
+                                std::lock_guard<std::mutex> lock(kcp_mutex);
+                                kcp_ret = ikcp_input(client->m_kcp, recv_buffer, ret);
+                            }
+                            if (kcp_ret < 0) {
+                                // printf("ikcp_input error: %d\n", ret);
+                                continue;
+                            }
 
-                        //         memcpy(&client->file_size, buffer, sizeof(uint32_t));
-                        //         client->file_size = ntohl(client->file_size);
-                        //         printf("File size: %u\n", client->file_size);
+                            while (true) {
+                                char buffer[RECV_MAX_SIZE + 10] {};
+                                int len;
+                                {
+                                    std::lock_guard<std::mutex> lock(kcp_mutex);
+                                    len = ikcp_recv(client->m_kcp, buffer, ret);
+                                }
+                                if (len < 0) {
+                                    break;
+                                }
+                                // std::cout << "len: " << len << std::endl;
+                                std::cout << "recv len: " << len << std::endl;
+                                if (len > 0) {
+                                    // data
+                                    if (!client->read_file) {
+                                        assert(len >= 128 + 8);
+                                        client->read_file = true;
 
-                        //         char file_name[128 + 10] = { 0 };
-                        //         memcpy(file_name, buffer + sizeof(uint32_t), 128);
-                                
-                                
-                        //         // printf("File name: %s\n", file_name);
-                        //         client->filePath = client->prefix_path;
-                        //         client->filePath += std::to_string(m_pid);
-                        //         client->filePath += "_";
-                        //         client->filePath += std::to_string(cnt.load());
-                        //         client->filePath += ".txt";
-                        //         cnt.fetch_add(1);
-                                
-                        //         // file_name = random_24();
-                        //         // filePath = prefix_path + file_name;
-                        //         client->file.open(client->filePath, std::ios::out | std::ios::binary);
-                                
-                        //         if (len > 8 + 128) {
-                        //             client->file.write(buffer + 8 + 128, len - (8 + 128));
-                        //             client->file_sended += len - (8 + 128);
-                        //             // std::cout << "recv size: " << client->file_sended << std::endl;
-                        //         }
-                        //         continue;
-                        //     }
-                        //     client->file.write(buffer, len);
-                        //     client->file_sended += len;
-                        //     // std::cout << "recv size: " << client->file_sended << std::endl;
-                        //     // std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
-                        //     if (client->file_sended >= client->file_size) {
-                        //         printf("File %s received completely, c_port: %d \n", client->filePath.c_str(), client->c_port);
-                        //         client->file.close();
-                        //         // flagSended = true;
-                        //         std::string send_buffer = "send_finish";
-                        //         ikcp_send(client->m_kcp, send_buffer.c_str(), send_buffer.size());
-                        //     }
-                        // }
-                    } else if (!ret) {
-                        // std::cout << "closing, close fd" << fd << std::endl;
-                        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
-                            perror("epoll_ctl: EPOLL_CTL_DEL");
+                                        memcpy(&client->file_size, buffer, sizeof(uint32_t));
+                                        client->file_size = ntohl(client->file_size);
+                                        // printf("File size: %u\n", client->file_size);
+
+                                        char file_name[128 + 10] = { 0 };
+                                        memcpy(file_name, buffer + sizeof(uint32_t), 128);
+                                        
+                                        
+                                        // printf("File name: %s\n", file_name);
+                                        client->filePath = client->prefix_path;
+                                        client->filePath += std::to_string(m_pid);
+                                        client->filePath += "_";
+                                        client->filePath += std::to_string(cnt.load());
+                                        client->filePath += ".txt";
+                                        cnt.fetch_add(1);
+                                        
+                                        // file_name = random_24();
+                                        // filePath = prefix_path + file_name;
+                                        client->file.open(client->filePath, std::ios::out | std::ios::binary);
+                                        
+                                        if (len > 8 + 128) {
+                                            client->file.write(buffer + 8 + 128, len - (8 + 128));
+                                            client->file_sended += len - (8 + 128);
+                                            // std::cout << "recv size: " << client->file_sended << std::endl;
+                                        }
+                                        continue;
+                                    }
+                                    client->file.write(buffer, len);
+                                    client->file_sended += len;
+                                    // std::cout << "recv size: " << client->file_sended << std::endl;
+                                    std::cout << "file_sended: " << client->file_sended << "fd: " << fd << std::endl;
+                                    if (client->file_sended >= client->file_size) {
+                                        printf("File %s received completely, c_port: %d \n", client->filePath.c_str(), client->c_port);
+                                        client->file.close();
+                                        // flagSended = true;
+                                        std::string send_buffer = "send_finish";
+                                        std::lock_guard<std::mutex> lock(kcp_mutex);
+                                        ikcp_send(client->m_kcp, send_buffer.c_str(), send_buffer.size());
+                                    }
+                                }
+                            }
+                            
+                        } else if (!ret) {
+                            // std::cout << "closing, close fd" << fd << std::endl;
+                            if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
+                                perror("epoll_ctl: EPOLL_CTL_DEL");
+                            }
+                            assert(client);
+                            client->stopFlag.store(true);
+                            break;
+                            // client->Close();
+                            {
+                                // std::lock_guard<std::mutex> lock(update_mutex);
+                                // clients.erase(clients.find(fd));
+                            }
+                            // close(fd);
+                        } else {
+                            break;
                         }
-                        assert(client);
-                        client->stopFlag.store(true);
-                        // client->Close();
-                        {
-                            // std::lock_guard<std::mutex> lock(update_mutex);
-                            // clients.erase(clients.find(fd));
-                        }
-                        // close(fd);
-                    } else {
                     }
-                    
 
                 }
             }

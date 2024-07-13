@@ -17,7 +17,10 @@ public:
     int setNonBlocking(int fd);
     int startServer();
     void* updateKcp();
+
     void create_thread();
+    void send_file();
+
     void startEpoll();
     void setListenSock(int sock) { listen_sock = sock;}
     void setEpollFd(int fd) { epoll_fd = fd;}
@@ -30,8 +33,11 @@ private:
     uint16_t server_port;
     std::atomic<bool> stopFlag;
     std::mutex update_mutex;
+    std::mutex kcp_mutex;
     std::map<int, std::shared_ptr<KCP::KcpHandleClient>> clients;
+    
     std::unique_ptr<std::thread> update_thread;
+ 
 };
 
 
