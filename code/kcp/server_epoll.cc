@@ -210,7 +210,6 @@ void ServerEpoll::startEpoll() {
     std::atomic<int>cnt = { 0 };
 
 
-
     struct epoll_event events[MAX_EVENTS];
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
@@ -231,9 +230,8 @@ void ServerEpoll::startEpoll() {
                     continue;
                 }
                 
-                // std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
-                // " new_fd: " << fd << std::endl;
-                
+                std::cout << "New connection from: " << inet_ntoa(peer.sin_addr) << ":" << ntohs(peer.sin_port) <<
+                " new_fd: " << fd << "\n";
                 uint32_t c_port = ntohs(peer.sin_port);
                 char* c_ip = inet_ntoa(peer.sin_addr);
                 // 设置新连接为非阻塞
@@ -335,6 +333,8 @@ void ServerEpoll::startEpoll() {
                                 kcp_ret = ikcp_input(client->m_kcp, recv_buffer, ret);
                             }
                             if (kcp_ret < 0) {
+                                std::string msg = "send_finish";
+                                send(client->fd, msg.c_str(), msg.size(), 0);
                                 // printf("ikcp_input error: %d\n", ret);
                                 continue;
                             }
