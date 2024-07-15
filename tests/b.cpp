@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DATA_SIZE 1000
+#define DATA_SIZE 1024 * 100
 
 int main() {
     FILE *file;

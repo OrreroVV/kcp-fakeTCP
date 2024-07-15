@@ -69,7 +69,8 @@ void sendFile(const char* filepath, const char* filename) {
         std::cout << sock << " send: " << bytesRead << std::endl;
     }
     
-
+    int ret = read(sock, buffer, BUFFER_SIZE);
+    std::cout << "read: " << ret << " " << buffer << "\n";
     // 关闭文件和socket
     file.close();
     close(sock);

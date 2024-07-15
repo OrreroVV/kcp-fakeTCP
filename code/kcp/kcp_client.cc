@@ -440,8 +440,8 @@ void KcpClient::kcp_client_start()
 	}
 
 	stopFlag.store(false);
-	// kcp_loop_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::client_loop, this));
-	// kcp_loop_thread->detach();
+	kcp_loop_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::client_loop, this));
+	kcp_loop_thread->detach();
 
 	kcp_client_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::run_tcp_client, this));
 	kcp_client_thread->detach();
@@ -584,30 +584,57 @@ void KcpClient::start_hand_shake() {
 	auto end = std::chrono::high_resolution_clock::now() + std::chrono::seconds(3);
 
 	while (true) {
-		ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&recv_dest, &addrlen);
-		if (ret < 0) {
-			// perror("recvfrom");
-			continue;
-		}
-		prase_tcp_packet(data, ret, &info);
+		fd_set read_fds;
+		FD_ZERO(&read_fds);
+		FD_SET(fd, &read_fds);
 
-		if (info.port_dst == c_port) {
-			if (info.fin) {
-				// std::cout << "server fin start break" << std::endl;
-				s_state = TCP_ESTABLISHED;
-				start_waving();
-				return;
+		struct timeval timeout;
+		timeout.tv_sec = 5;
+		timeout.tv_usec = 0;
+
+		int ret = select(fd + 1, &read_fds, nullptr, nullptr, &timeout);
+		if (ret <= 0) {
+			perror("select");
+		}
+
+		struct sockaddr_in dest;
+		setAddr(s_ip, s_port, &dest);
+		ssize_t recv_len = 0;
+		if (FD_ISSET(fd, &read_fds)) {
+
+			recv_len = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&recv_dest, &addrlen);
+			if (recv_len < 0) {
+				perror("sendto");
+			} else {
+
+				if (recv_len < 0) {
+					// perror("recvfrom");
+					continue;
+				}
+				prase_tcp_packet(data, recv_len, &info);
+
+				if (info.port_dst == c_port) {
+					if (info.fin) {
+						// std::cout << "server fin start break" << std::endl;
+						s_state = TCP_ESTABLISHED;
+						start_waving();
+						return;
+					}
+					break;
+				} else {
+					
+				}
+				if (std::chrono::high_resolution_clock::now() >= end) {
+					perror("recv ack syn");
+					return;
+				}
+
 			}
-			break;
-		} else {
-			
 		}
-		if (std::chrono::high_resolution_clock::now() >= end) {
-			perror("recv ack syn");
-			return;
-		}
+
 		KCP::isleep(1);
 	}
+
 	if (info.ack_seq != seq + 1) {
 		printf("invalid ack_seq: %d\n", info.ack_seq);
 		return;
