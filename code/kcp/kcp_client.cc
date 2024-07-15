@@ -7,7 +7,7 @@ namespace KCP {
 int tcp_client_cb(const char *buffer, int len, ikcpcb *kcp, void *user)
 {
 	KcpClient *client = static_cast<KcpClient*>(user);
-	// std::cout <<"client fd: " << client->fd << "cb_len: " << len << std::endl;
+	std::cout <<"client fd: " << client->fd << "cb_len: " << len << std::endl;
 
 	int sended = 0;
 	while (sended < len)
@@ -128,6 +128,7 @@ KcpClient::KcpClient(int fd, uint16_t c_port, uint16_t s_port, const char* c_ip,
 KcpClient::~KcpClient() {
 	// std::cout << "~" << fd << std::endl;
 	Close();
+	close(fd);
 }
 
 int KcpClient::nonBlockingSend(const char *data, size_t len) {
@@ -213,6 +214,12 @@ void KcpClient::run_tcp_client() {
 	uint32_t file_size = 0;
 
 	while (!stopFlag.load()) {
+		
+		{
+			std::lock_guard<std::mutex> lock(kcp_mutex);
+			ikcp_update(m_kcp, KCP::iclock());
+		}
+
 		struct sockaddr_in src;
 		socklen_t src_len = sizeof(struct sockaddr_in);
 		setAddr(s_ip, s_port, &src);
@@ -342,7 +349,11 @@ void KcpClient::run_tcp_client() {
 				// ::sendto(fd, send_buffer, IP_TCP_HEADER_SIZE, 0, (sockaddr*)&src, src_len);
 
 				// std::cout << "ikcp_input size: " << len - (sizeof(struct iphdr) + sizeof(struct tcphdr)) << std::endl;
-				int ret = ikcp_input(m_kcp, buffer + sizeof(struct iphdr) + sizeof(struct tcphdr), len - (sizeof(struct iphdr) + sizeof(struct tcphdr)));
+				int ret = 0;
+				{
+					std::lock_guard<std::mutex> lock(kcp_mutex);
+					ret = ikcp_input(m_kcp, buffer + sizeof(struct iphdr) + sizeof(struct tcphdr), len - (sizeof(struct iphdr) + sizeof(struct tcphdr)));
+				}
 				// std::cout << "ikcp_input ret: " << ret << std::endl;
 				if (ret < 0)
 				{
@@ -372,6 +383,8 @@ void KcpClient::run_tcp_client() {
 
 		KCP::isleep(1);
 	}
+
+	finish_loop.store(true);
 }
 
 void* KcpClient::client_loop()
@@ -401,7 +414,7 @@ void KcpClient::kcp_client_start()
 	// ikcp_setmtu(m_kcp, 1400);
 	int sndwnd = 256, rcvwnd = 256;
 	ikcp_wndsize(m_kcp, sndwnd, rcvwnd);
-	int mod = 0;
+	int mod = 1;
 	switch (mod)
 	{
 	case 0:
@@ -427,14 +440,15 @@ void KcpClient::kcp_client_start()
 	}
 
 	stopFlag.store(false);
-	kcp_loop_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::client_loop, this));
-	kcp_loop_thread->detach();
+	// kcp_loop_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::client_loop, this));
+	// kcp_loop_thread->detach();
 
 	kcp_client_thread = std::unique_ptr<std::thread>(new std::thread(&KcpClient::run_tcp_client, this));
 	kcp_client_thread->detach();
 }
 
 void KcpClient::send_file() {
+
 	auto start_time = std::chrono::high_resolution_clock::now();
 	// std::cout <<"start send file" << std::endl;
 	assert(s_state == TCP_ESTABLISHED);
@@ -475,50 +489,66 @@ void KcpClient::send_file() {
 		{
 			std::lock_guard<std::mutex> lock(kcp_mutex);
 			ikcp_send(m_kcp, buf, s);
-			// std::cout << "ikcp_send: " << temp << "\n";
+			std::cout << "ikcp_send: " << s << "\n";
 		}
 		// std::cout <<"send: " << s << "\n";
 	}
 	file.close();
 
-	int XX = 0;
+	auto end = std::chrono::high_resolution_clock::now() + std::chrono::seconds(3);
 	while (!finishSend.load()) {
-		KCP::isleep(5);
-		if (++XX >= 10000) {
-			std::cout << "loop load" << std::endl;
-			break;
-		}
-	}
-
-
-
-	int XXX = 0;
-	while (ikcp_waitsnd(m_kcp) > 0) {
-		KCP::isleep(5);
-		if (++XXX >= 10000) {
-			std::cout << "loop ikcp waitsnd" << std::endl;
+		KCP::isleep(1);
+		if (std::chrono::high_resolution_clock::now() >= end) {
+			perror("finishSend");
+			Close();
 			return;
 		}
 	}
 
-	// while (!finish_file.load()) {
-	// 	KCP::isleep(1);
-	// 	if (++XXX >= 10000) {
-	// 		std::cout << "loop finish recv file" << std::endl;
-	// 		return;
-	// 	}
-	// }
 
-	KCP::isleep(5);
+
+	end = std::chrono::high_resolution_clock::now() + std::chrono::seconds(3);
+	while (true) {
+		int temp = 0;
+		{
+			std::lock_guard<std::mutex> lock(kcp_mutex);
+			temp = ikcp_waitsnd(m_kcp);
+		}
+		if (!temp) break;
+		KCP::isleep(1);
+		if (std::chrono::high_resolution_clock::now() >= end) {
+			perror("recv ack syn");
+			return;
+		}
+	}
+
+	// KCP::isleep(5);
 	auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end_time - start_time;
     std::cout << " connections in " << duration.count() << " seconds\n";
 
 	stopFlag.store(true);
+
+
+	end = std::chrono::high_resolution_clock::now() + std::chrono::seconds(3);
+	while (true) {
+		if (finish_loop.load()) {
+			break;
+		}
+		if (std::chrono::high_resolution_clock::now() >= end) {
+			perror("finishSend");
+			return;
+		}
+		KCP::isleep(1);
+	}
+
 	// std::cout << "end send file" << std::endl;
-	
-	auto start = std::chrono::high_resolution_clock::now();
-	auto end = start + std::chrono::seconds(3);
+	finish();
+
+}
+
+void KcpClient::finish() {
+	auto end = std::chrono::high_resolution_clock::now() + std::chrono::seconds(3);
 	while (true) {
 		if (s_state == TCP_CLOSING) {
 			return;
@@ -550,7 +580,9 @@ void KcpClient::start_hand_shake() {
 	setAddr(s_ip, s_port, &recv_dest);
 	socklen_t addrlen = sizeof(sockaddr_in);
 	tcp_info info;
-	int cnt_temp1 = 0;
+
+	auto end = std::chrono::high_resolution_clock::now() + std::chrono::seconds(3);
+
 	while (true) {
 		ret = recvfrom(fd, data, sizeof(data), 0, (sockaddr*)&recv_dest, &addrlen);
 		if (ret < 0) {
@@ -568,15 +600,16 @@ void KcpClient::start_hand_shake() {
 			}
 			break;
 		} else {
-			if (++cnt_temp1 >= 10000) {
-				return;
-			}
+			
+		}
+		if (std::chrono::high_resolution_clock::now() >= end) {
+			perror("recv ack syn");
+			return;
 		}
 		KCP::isleep(1);
 	}
 	if (info.ack_seq != seq + 1) {
 		printf("invalid ack_seq: %d\n", info.ack_seq);
-		Close();
 		return;
 	}
 
@@ -771,10 +804,20 @@ void KcpClient::Close() {
 	if (!m_kcp) {
 		return;
 	}
+	stopFlag.store(true);
+	auto end = std::chrono::high_resolution_clock::now() + std::chrono::seconds(3);
+	while (true) {
+		if (finish_loop.load()) {
+			break;
+		}
+		if (std::chrono::high_resolution_clock::now() >= end) {
+			return;
+		}
+		KCP::isleep(1);
+	}
 	//std::this_thread::sleep_for(std::chrono::seconds(1));
 	ikcp_release(m_kcp);
 	m_kcp = nullptr;
-	close(fd);
 }
 
 }

@@ -68,6 +68,9 @@ add_executable(test tests/test_kcp_client.cc)
 add_dependencies(test hzh)
 target_link_libraries(test ${LIB_LIB})# 设置编译选项
 
+add_executable(test_thread tests/test.cpp)
+add_dependencies(test_thread hzh)
+target_link_libraries(test_thread ${LIB_LIB})# 设置编译选项
 
 # add_executable(test tests/test_kcp_client.cc)
 # add_dependencies(test hzh)

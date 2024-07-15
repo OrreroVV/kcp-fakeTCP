@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DATA_SIZE 24
+#define DATA_SIZE 1000
 
 int main() {
     FILE *file;
@@ -30,7 +30,7 @@ int main() {
     // 关闭文件
     fclose(file);
 
-    printf("已成功写入10000个字节的数据到output.txt\n");
+    printf("已成功写入%d个字节的数据到output.txt\n", DATA_SIZE);
 
     return 0;
 }

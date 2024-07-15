@@ -9,7 +9,6 @@
 #include "ikcp.h"
 #include "kcp_socket.h"
 
-#define UDP_MTU 1024 + 48
 #define BUFFER_SIZE 1024
 #define IPV4_HEADER_SIZE (sizeof(struct iphdr))
 #define TCP_HEADER_SIZE (sizeof(struct tcphdr))
@@ -51,6 +50,7 @@ public:
 
     int nonBlockingSend(const char *data, size_t len);
 
+    void finish();
 
     void waving_send_fin();
     void waving_recv_ack();
@@ -69,6 +69,7 @@ public:
     int s_state;
     bool read_file;
     std::atomic<bool> finish_file;
+    std::atomic<bool> finish_loop;
     ikcpcb* m_kcp;
 
     uint32_t seq;
